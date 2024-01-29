@@ -1,3 +1,4 @@
+/* eslint-disable prefer-rest-params, no-unused-vars */
 import { Knex } from "knex";
 import { getColumnInformation, getColumnProperties, getPrimaryKeyColumn, getTableName } from "./decorators";
 import { NestedForeignKeyKeysOf, NestedKeysOf } from "./NestedKeysOf";
@@ -12,8 +13,8 @@ import { FlattenOption, setToNull, unflatten } from "./unflatten";
 export class TypedKnex {
     constructor(private knex: Knex) {}
 
-    public query<T>(tableClass: new () => T): ITypedQueryBuilder<T, T, T> {
-        return new TypedQueryBuilder<T, T, T>(tableClass, this.knex);
+    public query<T>(tableClass: new () => T, granularity?: Granularity): ITypedQueryBuilder<T, T, T> {
+        return new TypedQueryBuilder<T, T, T>(tableClass, granularity, this.knex);
     }
 
     public beginTransaction(): Promise<Knex.Transaction> {
@@ -384,6 +385,8 @@ interface IUnion<Model, SelectableModel, Row> {
     <SubQueryModel>(subQueryModel: new () => SubQueryModel, code: (subQuery: ITypedQueryBuilder<SubQueryModel, SubQueryModel, {}>) => void): ITypedQueryBuilder<Model, SelectableModel, Row>;
 }
 
+type Granularity = "PAGLOCK" | "NOLOCK" | "READCOMMITTEDLOCK" | "ROWLOCK" | "TABLOCK" | "TABLOCKX";
+
 function getProxyAndMemories<ModelType, Row>(typedQueryBuilder?: TypedQueryBuilder<ModelType, Row>) {
     const memories = [] as string[];
 
@@ -479,19 +482,27 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     private subQueryCounter = 0;
 
-    constructor(private tableClass: new () => ModelType, private knex: Knex, queryBuilder?: Knex.QueryBuilder, private parentTypedQueryBuilder?: any, private subQueryPrefix?: string) {
+    constructor(
+        private tableClass: new () => ModelType,
+        private granularity: Granularity | undefined,
+        private knex: Knex,
+        queryBuilder?: Knex.QueryBuilder,
+        private parentTypedQueryBuilder?: any,
+        private subQueryPrefix?: string
+    ) {
         this.tableName = getTableName(tableClass);
         this.columns = getColumnProperties(tableClass);
 
+        const granularityQuery = !granularity ? "" : ` WITH (${granularity})`;
         if (queryBuilder !== undefined) {
             this.queryBuilder = queryBuilder;
             if (this.subQueryPrefix) {
-                this.queryBuilder.from({ [`${this.subQueryPrefix}${this.tableName}`]: this.tableName });
+                this.queryBuilder.from(this.knex.raw(`?? as ??${granularityQuery}`, [this.tableName, `${this.subQueryPrefix}${this.tableName}`]));
             } else {
-                this.queryBuilder.from(this.tableName);
+                this.queryBuilder.from(this.knex.raw(`??${granularityQuery}`, [this.tableName]));
             }
         } else {
-            this.queryBuilder = this.knex.from(this.tableName);
+            this.queryBuilder = this.knex.from(this.knex.raw(`??${granularityQuery}`, [this.tableName]));
         }
 
         this.extraJoinedProperties = [];
@@ -1115,7 +1126,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             const subQuery = this;
             const { root, memories } = getProxyAndMemories(that);
 
-            const subQB = new TypedQueryBuilder(typeOfSubQuery, that.knex, subQuery, that, subQueryPrefix);
+            const subQB = new TypedQueryBuilder(typeOfSubQuery, that.granularity, that.knex, subQuery, that, subQueryPrefix);
             subQB.extraJoinedProperties = that.extraJoinedProperties;
             functionToCall(subQB, root, memories);
         });
@@ -1129,7 +1140,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
         const { root, memories } = getProxyAndMemories(this as any);
 
-        const subQueryBuilder = new TypedQueryBuilder(typeOfSubQuery, this.knex, undefined, this);
+        const subQueryBuilder = new TypedQueryBuilder(typeOfSubQuery, this.granularity, this.knex, undefined, this);
         functionToCall(subQueryBuilder, root, memories);
 
         (this.selectRaw as any)(name, undefined, subQueryBuilder.toQuery());
@@ -1340,7 +1351,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     public async insertSelect() {
         const tableName = getTableName(arguments[0]);
 
-        const typedQueryBuilderForInsert = new TypedQueryBuilder<any, any>(arguments[0], this.knex);
+        const typedQueryBuilderForInsert = new TypedQueryBuilder<any, any>(arguments[0], undefined, this.knex);
         let columnArgumentsList;
         if (typeof arguments[1] === "string") {
             const [, ...columnArguments] = arguments;
@@ -1382,7 +1393,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     public clone() {
         const queryBuilderClone = this.queryBuilder.clone();
 
-        const typedQueryBuilderClone = new TypedQueryBuilder<ModelType, Row>(this.tableClass, this.knex, queryBuilderClone);
+        const typedQueryBuilderClone = new TypedQueryBuilder<ModelType, Row>(this.tableClass, this.granularity, this.knex, queryBuilderClone);
 
         return typedQueryBuilderClone as any;
     }
