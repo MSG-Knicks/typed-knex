@@ -280,7 +280,8 @@ interface ISelectQuery<Model, SelectableModel, Row> {
         name: TName,
         returnType: IConstructor<TReturn>,
         subQueryModel: new () => SubQueryModel,
-        code: (subQuery: ITypedQueryBuilder<SubQueryModel, SubQueryModel, {}>, parent: TransformPropsToFunctionsReturnPropertyName<Model>) => void
+        code: (subQuery: ITypedQueryBuilder<SubQueryModel, SubQueryModel, {}>, parent: TransformPropsToFunctionsReturnPropertyName<Model>) => void,
+        granularity?: Granularity
     ): ITypedQueryBuilder<Model, SelectableModel, Record<TName, ObjectToPrimitive<TReturn>> & Row>;
 }
 
@@ -320,7 +321,7 @@ interface IFindByPrimaryKey<_Model, SelectableModel, Row> {
 }
 
 interface IKeyFunctionAsParametersReturnQueryBuider<Model, SelectableModel, Row> {
-    <ConcatKey extends NestedForeignKeyKeysOf<NonNullableRecursive<Model>, keyof NonNullableRecursive<Model>, "">>(key: ConcatKey): ITypedQueryBuilder<Model, SelectableModel, Row>;
+    <ConcatKey extends NestedForeignKeyKeysOf<NonNullableRecursive<Model>, keyof NonNullableRecursive<Model>, "">>(key: ConcatKey, granularity?: Granularity): ITypedQueryBuilder<Model, SelectableModel, Row>;
 }
 
 interface ISelectableColumnKeyFunctionAsParametersReturnQueryBuider<Model, SelectableModel, Row> {
@@ -897,10 +898,10 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     }
 
     public innerJoinColumn() {
-        return this.joinColumn("innerJoin", arguments[0]);
+        return this.joinColumn("innerJoin", arguments[0], arguments[1]);
     }
     public leftOuterJoinColumn() {
-        return this.joinColumn("leftOuterJoin", arguments[0]);
+        return this.joinColumn("leftOuterJoin", arguments[0], arguments[1]);
     }
 
     public innerJoinTable() {
@@ -1116,7 +1117,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         return this.callKnexFunctionWithColumnFunction(this.queryBuilder.orWhereNotBetween.bind(this.queryBuilder), ...arguments);
     }
 
-    public callQueryCallbackFunction(functionName: string, typeOfSubQuery: any, functionToCall: any) {
+    public callQueryCallbackFunction(functionName: string, typeOfSubQuery: any, functionToCall: any, granularity: Granularity | undefined) {
         const that = this as any;
         let subQueryPrefix: string | undefined;
         if (["whereExists", "orWhereExists", "whereNotExists", "orWhereNotExists", "havingExists", "havingNotExists"].includes(functionName)) {
@@ -1126,7 +1127,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             const subQuery = this;
             const { root, memories } = getProxyAndMemories(that);
 
-            const subQB = new TypedQueryBuilder(typeOfSubQuery, that.granularity, that.knex, subQuery, that, subQueryPrefix);
+            const subQB = new TypedQueryBuilder(typeOfSubQuery, granularity, that.knex, subQuery, that, subQueryPrefix);
             subQB.extraJoinedProperties = that.extraJoinedProperties;
             functionToCall(subQB, root, memories);
         });
@@ -1137,10 +1138,11 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         const name = arguments[0];
         const typeOfSubQuery = arguments[2];
         const functionToCall = arguments[3];
+        const granularity = arguments[4];
 
         const { root, memories } = getProxyAndMemories(this as any);
 
-        const subQueryBuilder = new TypedQueryBuilder(typeOfSubQuery, this.granularity, this.knex, undefined, this);
+        const subQueryBuilder = new TypedQueryBuilder(typeOfSubQuery, granularity, this.knex, undefined, this);
         functionToCall(subQueryBuilder, root, memories);
 
         (this.selectRaw as any)(name, undefined, subQueryBuilder.toQuery());
@@ -1501,7 +1503,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         return this.getColumnNameWithoutAlias(...columnParts);
     }
 
-    private joinColumn(joinType: "innerJoin" | "leftOuterJoin", f: any) {
+    private joinColumn(joinType: "innerJoin" | "leftOuterJoin", f: any, granularity: Granularity | undefined) {
         let columnToJoinArguments: string[];
 
         if (typeof f === "string") {
@@ -1529,11 +1531,12 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         const tableToJoinName = getTableName(secondColumnClass);
         const tableToJoinAlias = `${this.subQueryPrefix ?? ""}${secondColumnAlias}`;
         const tableToJoinJoinColumnName = `${tableToJoinAlias}.${getPrimaryKeyColumn(secondColumnClass).name}`;
+        const granularityQuery = !granularity ? "" : ` WITH (${granularity})`;
 
         if (joinType === "innerJoin") {
-            this.queryBuilder.innerJoin(`${tableToJoinName} as ${tableToJoinAlias}`, tableToJoinJoinColumnName, columnToJoinName);
+            this.queryBuilder.innerJoin(`${tableToJoinName} as ${tableToJoinAlias}${granularityQuery}`, tableToJoinJoinColumnName, columnToJoinName);
         } else if (joinType === "leftOuterJoin") {
-            this.queryBuilder.leftOuterJoin(`${tableToJoinName} as ${tableToJoinAlias}`, tableToJoinJoinColumnName, columnToJoinName);
+            this.queryBuilder.leftOuterJoin(`${tableToJoinName} as ${tableToJoinAlias}${granularityQuery}`, tableToJoinJoinColumnName, columnToJoinName);
         }
 
         return this;
