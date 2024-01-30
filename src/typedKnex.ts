@@ -1,4 +1,4 @@
-/* eslint-disable prefer-rest-params, no-unused-vars */
+/* eslint-disable no-unused-vars */
 import { Knex } from "knex";
 import { getColumnInformation, getColumnProperties, getPrimaryKeyColumn, getTableName } from "./decorators";
 import { NestedForeignKeyKeysOf, NestedKeysOf } from "./NestedKeysOf";
@@ -546,9 +546,9 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         await this.queryBuilder.del().where(primaryKeyColumnInfo.name, value);
     }
 
-    public async updateItemWithReturning() {
-        const newObject = arguments[0];
-        const returnProperties = arguments[1] as string[] | undefined;
+    public updateItemWithReturning(newObject: Partial<RemoveObjectsFrom<ModelType>>): Promise<RemoveObjectsFrom<ModelType>>;
+    public updateItemWithReturning<Keys extends keyof RemoveObjectsFrom<ModelType>>(newObject: Partial<RemoveObjectsFrom<ModelType>>, keys: Keys[]): Promise<Pick<RemoveObjectsFrom<ModelType>, Keys>>;
+    public async updateItemWithReturning(newObject: Partial<RemoveObjectsFrom<ModelType>>, returnProperties?: (keyof RemoveObjectsFrom<ModelType>)[]) {
         let item = newObject;
         if (beforeUpdateTransform) {
             item = beforeUpdateTransform(newObject, this);
@@ -557,7 +557,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
         const query = this.queryBuilder.update(item);
         if (returnProperties) {
-            const mappedNames = returnProperties.map((columnName) => this.getColumnName(columnName));
+            const mappedNames = returnProperties.map((columnName) => this.getColumnName(columnName as string));
             query.returning(mappedNames);
         } else {
             query.returning("*");
@@ -566,20 +566,20 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         if (this.onlyLogQuery) {
             this.queryLog += query.toQuery() + "\n";
 
-            return {} as any;
+            return {};
         } else {
             const rows = (await query) as any;
             const item = rows[0];
 
             this.mapColumnsToProperties(item);
 
-            return item as any;
+            return item;
         }
     }
 
-    public async insertItemWithReturning() {
-        const newObject = arguments[0];
-        const returnProperties = arguments[1] as string[] | undefined;
+    public insertItemWithReturning(newObject: Partial<RemoveObjectsFrom<ModelType>>): Promise<RemoveObjectsFrom<ModelType>>;
+    public insertItemWithReturning<Keys extends keyof RemoveObjectsFrom<ModelType>>(newObject: Partial<RemoveObjectsFrom<ModelType>>, keys: Keys[]): Promise<Pick<RemoveObjectsFrom<ModelType>, Keys>>;
+    public async insertItemWithReturning(newObject: Partial<RemoveObjectsFrom<ModelType>>, returnProperties?: (keyof RemoveObjectsFrom<ModelType>)[]) {
         let item = newObject;
         if (beforeInsertTransform) {
             item = beforeInsertTransform(newObject, this);
@@ -588,7 +588,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
         const query = this.queryBuilder.insert(item);
         if (returnProperties) {
-            const mappedNames = returnProperties.map((columnName) => this.getColumnName(columnName));
+            const mappedNames = returnProperties.map((columnName) => this.getColumnName(columnName as string));
             query.returning(mappedNames);
         } else {
             query.returning("*");
@@ -597,14 +597,14 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         if (this.onlyLogQuery) {
             this.queryLog += query.toQuery() + "\n";
 
-            return {} as any;
+            return {};
         } else {
             const rows = await query;
             const item = rows[0];
 
             this.mapColumnsToProperties(item);
 
-            return item as any;
+            return item;
         }
     }
 
@@ -733,7 +733,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         return result[0].count;
     }
 
-    public async getFirstOrNull() {
+    public async getFirstOrNull(flattenOption?: FlattenOption) {
         if (this.hasSelectClause === false) {
             this.selectAllModelProperties();
         }
@@ -746,7 +746,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
                 return null;
             }
 
-            return this.flattenByOption(items[0], arguments[0]);
+            return this.flattenByOption(items[0], flattenOption);
         }
     }
     public async getFirstOrUndefined() {
@@ -757,7 +757,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         return firstOrNullResult;
     }
 
-    public async getFirst() {
+    public async getFirst(flattenOption?: FlattenOption) {
         if (this.hasSelectClause === false) {
             this.selectAllModelProperties();
         }
@@ -770,11 +770,11 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
                 throw new Error("Item not found.");
             }
 
-            return this.flattenByOption(items[0], arguments[0]);
+            return this.flattenByOption(items[0], flattenOption);
         }
     }
 
-    public async getSingleOrNull() {
+    public async getSingleOrNull(flattenOption?: FlattenOption) {
         if (this.hasSelectClause === false) {
             this.selectAllModelProperties();
         }
@@ -788,7 +788,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             } else if (items.length > 1) {
                 throw new Error(`More than one item found: ${items.length}.`);
             }
-            return this.flattenByOption(items[0], arguments[0]);
+            return this.flattenByOption(items[0], flattenOption);
         }
     }
 
@@ -800,7 +800,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         return singleOrNullResult;
     }
 
-    public async getSingle() {
+    public async getSingle(flattenOption?: FlattenOption) {
         if (this.hasSelectClause === false) {
             this.selectAllModelProperties();
         }
@@ -814,7 +814,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             } else if (items.length > 1) {
                 throw new Error(`More than one item found: ${items.length}.`);
             }
-            return this.flattenByOption(items[0], arguments[0]);
+            return this.flattenByOption(items[0], flattenOption);
         }
     }
 
@@ -876,7 +876,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         return this as any;
     }
 
-    public async getMany(): Promise<(Row extends ModelType ? RemoveObjectsFrom<ModelType> : Row)[]> {
+    public async getMany(flattenOption?: FlattenOption): Promise<(Row extends ModelType ? RemoveObjectsFrom<ModelType> : Row)[]> {
         if (this.hasSelectClause === false) {
             this.selectAllModelProperties();
         }
@@ -885,7 +885,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             return [];
         } else {
             const items = await this.queryBuilder;
-            return this.flattenByOption(items, arguments[0]) as (Row extends ModelType ? RemoveObjectsFrom<ModelType> : Row)[];
+            return this.flattenByOption(items, flattenOption) as (Row extends ModelType ? RemoveObjectsFrom<ModelType> : Row)[];
         }
     }
 
