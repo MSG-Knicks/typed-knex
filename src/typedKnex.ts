@@ -1,4 +1,4 @@
-/* eslint-disable no-unused-vars */
+/* eslint-disable prefer-rest-params, no-unused-vars */
 import { Knex } from "knex";
 import { getColumnInformation, getColumnProperties, getPrimaryKeyColumn, getTableName } from "./decorators";
 import { NestedForeignKeyKeysOf, NestedKeysOf } from "./NestedKeysOf";
@@ -255,12 +255,28 @@ interface IJoinTableMultipleOnClauses<Model, _SelectableModel, Row> {
         newPropertyClass: new () => NewPropertyType,
         on: (join: IJoinOnClause2<AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, NewPropertyType>) => void
     ): ITypedQueryBuilder<AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, Row>;
+
+    <NewPropertyType, NewPropertyKey extends keyof any>(
+        newPropertyKey: NewPropertyKey,
+        newPropertyClass: new () => NewPropertyType,
+        granularity: Granularity,
+        on: (join: IJoinOnClause2<AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, NewPropertyType>) => void
+    ): ITypedQueryBuilder<AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, Row>;
 }
 
 interface IJoin<Model, _SelectableModel, Row> {
     <NewPropertyType, NewPropertyKey extends keyof any, ConcatKey2 extends keyof NewPropertyType, ConcatKey extends NestedKeysOf<NonNullableRecursive<Model>, keyof NonNullableRecursive<Model>, "">>(
         newPropertyKey: NewPropertyKey,
         newPropertyClass: new () => NewPropertyType,
+        key: ConcatKey2,
+        operator: Operator,
+        key2: ConcatKey
+    ): ITypedQueryBuilder<AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, Row>;
+
+    <NewPropertyType, NewPropertyKey extends keyof any, ConcatKey2 extends keyof NewPropertyType, ConcatKey extends NestedKeysOf<NonNullableRecursive<Model>, keyof NonNullableRecursive<Model>, "">>(
+        newPropertyKey: NewPropertyKey,
+        newPropertyClass: new () => NewPropertyType,
+        granularity: Granularity,
         key: ConcatKey2,
         operator: Operator,
         key2: ConcatKey
@@ -376,6 +392,12 @@ interface IWhereExists<Model, SelectableModel, Row> {
         subQueryModel: new () => SubQueryModel,
         code: (subQuery: ITypedQueryBuilder<SubQueryModel, SubQueryModel, {}>, parent: TransformPropsToFunctionsReturnPropertyName<SelectableModel>) => void
     ): ITypedQueryBuilder<Model, SelectableModel, Row>;
+
+    <SubQueryModel>(
+        subQueryModel: new () => SubQueryModel,
+        granularity: Granularity,
+        code: (subQuery: ITypedQueryBuilder<SubQueryModel, SubQueryModel, {}>, parent: TransformPropsToFunctionsReturnPropertyName<SelectableModel>) => void
+    ): ITypedQueryBuilder<Model, SelectableModel, Row>;
 }
 
 interface IWhereParentheses<Model, SelectableModel, Row> {
@@ -384,6 +406,8 @@ interface IWhereParentheses<Model, SelectableModel, Row> {
 
 interface IUnion<Model, SelectableModel, Row> {
     <SubQueryModel>(subQueryModel: new () => SubQueryModel, code: (subQuery: ITypedQueryBuilder<SubQueryModel, SubQueryModel, {}>) => void): ITypedQueryBuilder<Model, SelectableModel, Row>;
+
+    <SubQueryModel>(subQueryModel: new () => SubQueryModel, granularity: Granularity, code: (subQuery: ITypedQueryBuilder<SubQueryModel, SubQueryModel, {}>) => void): ITypedQueryBuilder<Model, SelectableModel, Row>;
 }
 
 type Granularity = "PAGLOCK" | "NOLOCK" | "READCOMMITTEDLOCK" | "ROWLOCK" | "TABLOCK" | "TABLOCKX";
@@ -482,6 +506,8 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     private transaction?: Knex.Transaction;
 
     private subQueryCounter = 0;
+
+    private granularitySet: Set<string> = new Set<Granularity>(["NOLOCK", "PAGLOCK", "READCOMMITTEDLOCK", "ROWLOCK", "TABLOCK", "TABLOCKX"]);
 
     constructor(
         private tableClass: new () => ModelType,
@@ -929,18 +955,36 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     }
 
     public innerJoin() {
-        return this.join("innerJoin", arguments[0], arguments[1], arguments[2], arguments[3], arguments[4]);
+        const callIncludesGranularity = this.granularitySet.has(arguments[2]);
+        const granularity = callIncludesGranularity ? (arguments[2] as Granularity) : undefined;
+        const joinTableColumnString = callIncludesGranularity ? arguments[3] : arguments[2];
+        const operator = callIncludesGranularity ? arguments[4] : arguments[3];
+        const existingTableColumnString = callIncludesGranularity ? arguments[5] : arguments[4];
+
+        return this.join("innerJoin", arguments[0], arguments[1], granularity, joinTableColumnString, operator, existingTableColumnString);
     }
     public leftOuterJoin() {
-        return this.join("leftOuterJoin", arguments[0], arguments[1], arguments[2], arguments[3], arguments[4]);
+        const callIncludesGranularity = this.granularitySet.has(arguments[2]);
+        const granularity = callIncludesGranularity ? (arguments[2] as Granularity) : undefined;
+        const joinTableColumnString = callIncludesGranularity ? arguments[3] : arguments[2];
+        const operator = callIncludesGranularity ? arguments[4] : arguments[3];
+        const existingTableColumnString = callIncludesGranularity ? arguments[5] : arguments[4];
+
+        return this.join("leftOuterJoin", arguments[0], arguments[1], granularity, joinTableColumnString, operator, existingTableColumnString);
     }
 
     public innerJoinTableOnFunction() {
-        return this.joinTableOnFunction(this.queryBuilder.innerJoin.bind(this.queryBuilder), arguments[0], arguments[1], arguments[2]);
+        const granularity = typeof arguments[2] === "string" ? (arguments[2] as Granularity) : undefined;
+        const on = typeof arguments[2] === "string" ? arguments[3] : arguments[2];
+
+        return this.joinTableOnFunction(this.queryBuilder.innerJoin.bind(this.queryBuilder), arguments[0], arguments[1], granularity, on);
     }
 
     public leftOuterJoinTableOnFunction() {
-        return this.joinTableOnFunction(this.queryBuilder.leftOuterJoin.bind(this.queryBuilder), arguments[0], arguments[1], arguments[2]);
+        const granularity = typeof arguments[2] === "string" ? (arguments[2] as Granularity) : undefined;
+        const on = typeof arguments[2] === "string" ? arguments[3] : arguments[2];
+
+        return this.joinTableOnFunction(this.queryBuilder.leftOuterJoin.bind(this.queryBuilder), arguments[0], arguments[1], granularity, on);
     }
 
     public leftOuterJoinTable() {
@@ -1151,46 +1195,50 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     }
 
     public whereParentheses() {
-        this.callQueryCallbackFunction("where", this.tableClass, arguments[0]);
+        this.callQueryCallbackFunction("where", this.tableClass, arguments[0], undefined);
 
         return this;
     }
     public orWhereParentheses() {
-        this.callQueryCallbackFunction("orWhere", this.tableClass, arguments[0]);
+        this.callQueryCallbackFunction("orWhere", this.tableClass, arguments[0], undefined);
 
         return this;
     }
 
     public whereExists() {
         const typeOfSubQuery = arguments[0];
-        const functionToCall = arguments[1];
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
-        this.callQueryCallbackFunction("whereExists", typeOfSubQuery, functionToCall);
+        this.callQueryCallbackFunction("whereExists", typeOfSubQuery, functionToCall, granularity);
 
         return this;
     }
     public orWhereExists() {
         const typeOfSubQuery = arguments[0];
-        const functionToCall = arguments[1];
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
-        this.callQueryCallbackFunction("orWhereExists", typeOfSubQuery, functionToCall);
+        this.callQueryCallbackFunction("orWhereExists", typeOfSubQuery, functionToCall, granularity);
 
         return this;
     }
 
     public whereNotExists() {
         const typeOfSubQuery = arguments[0];
-        const functionToCall = arguments[1];
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
-        this.callQueryCallbackFunction("whereNotExists", typeOfSubQuery, functionToCall);
+        this.callQueryCallbackFunction("whereNotExists", typeOfSubQuery, functionToCall, granularity);
 
         return this;
     }
     public orWhereNotExists() {
         const typeOfSubQuery = arguments[0];
-        const functionToCall = arguments[1];
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
-        this.callQueryCallbackFunction("orWhereNotExists", typeOfSubQuery, functionToCall);
+        this.callQueryCallbackFunction("orWhereNotExists", typeOfSubQuery, functionToCall, granularity);
 
         return this;
     }
@@ -1231,18 +1279,20 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     public havingExists() {
         const typeOfSubQuery = arguments[0];
-        const functionToCall = arguments[1];
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
-        this.callQueryCallbackFunction("havingExists", typeOfSubQuery, functionToCall);
+        this.callQueryCallbackFunction("havingExists", typeOfSubQuery, functionToCall, granularity);
 
         return this;
     }
 
     public havingNotExists() {
         const typeOfSubQuery = arguments[0];
-        const functionToCall = arguments[1];
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
-        this.callQueryCallbackFunction("havingNotExists", typeOfSubQuery, functionToCall);
+        this.callQueryCallbackFunction("havingNotExists", typeOfSubQuery, functionToCall, granularity);
 
         return this;
     }
@@ -1271,18 +1321,20 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     public union() {
         const typeOfSubQuery = arguments[0];
-        const functionToCall = arguments[1];
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
-        this.callQueryCallbackFunction("union", typeOfSubQuery, functionToCall);
+        this.callQueryCallbackFunction("union", typeOfSubQuery, functionToCall, granularity);
 
         return this;
     }
 
     public unionAll() {
         const typeOfSubQuery = arguments[0];
-        const functionToCall = arguments[1];
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
-        this.callQueryCallbackFunction("unionAll", typeOfSubQuery, functionToCall);
+        this.callQueryCallbackFunction("unionAll", typeOfSubQuery, functionToCall, granularity);
 
         return this;
     }
@@ -1599,7 +1651,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         return setToNull(unflattened);
     }
 
-    private joinTableOnFunction(queryBuilderJoin: Knex.Join, newPropertyKey: any, newPropertyType: any, onFunction: (join: IJoinOnClause2<any, any>) => void) {
+    private joinTableOnFunction(queryBuilderJoin: Knex.Join, newPropertyKey: any, newPropertyType: any, granularity: Granularity | undefined, onFunction: (join: IJoinOnClause2<any, any>) => void) {
         this.extraJoinedProperties.push({
             name: newPropertyKey,
             propertyType: newPropertyType,
@@ -1608,9 +1660,10 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         const tableToJoinClass = newPropertyType;
         const tableToJoinName = getTableName(tableToJoinClass);
         const tableToJoinAlias = newPropertyKey;
+        const granularityQuery = !granularity ? "" : ` WITH (${granularity})`;
 
         let knexOnObject: any;
-        queryBuilderJoin(`${tableToJoinName} as ${tableToJoinAlias}`, function () {
+        queryBuilderJoin(`${tableToJoinName} as ${tableToJoinAlias}${granularityQuery}`, function () {
             knexOnObject = this;
         });
 
@@ -1709,7 +1762,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         }
     }
 
-    private join(joinFunctionName: string, tableToJoinAlias: any, tableToJoinClass: any, joinTableColumnString: any, operator: any, existingTableColumnString: any) {
+    private join(joinFunctionName: string, tableToJoinAlias: any, tableToJoinClass: any, granularity: Granularity | undefined, joinTableColumnString: any, operator: any, existingTableColumnString: any) {
         this.extraJoinedProperties.push({
             name: tableToJoinAlias,
             propertyType: tableToJoinClass,
@@ -1725,7 +1778,9 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
         const existingTableColumnName = this.getColumnName(...existingTableColumnString.split("."));
 
-        (this.queryBuilder as any)[joinFunctionName](`${tableToJoinName} as ${tableToJoinAliasWithUnderscores}`, joinTableColumnArguments, operator, existingTableColumnName);
+        const granularityQuery = !granularity ? "" : ` WITH (${granularity})`;
+
+        (this.queryBuilder as any)[joinFunctionName](`${tableToJoinName} as ${tableToJoinAliasWithUnderscores}${granularityQuery}`, joinTableColumnArguments, operator, existingTableColumnName);
 
         return this as any;
     }
