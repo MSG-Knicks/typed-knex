@@ -1,3 +1,4 @@
+/* eslint-disable prefer-rest-params, no-unused-vars */
 import { Knex } from "knex";
 import { getColumnInformation, getColumnProperties, getPrimaryKeyColumn, getTableName } from "./decorators";
 import { NestedForeignKeyKeysOf, NestedKeysOf } from "./NestedKeysOf";
@@ -12,8 +13,8 @@ import { FlattenOption, setToNull, unflatten } from "./unflatten";
 export class TypedKnex {
     constructor(private knex: Knex) {}
 
-    public query<T>(tableClass: new () => T): ITypedQueryBuilder<T, T, T> {
-        return new TypedQueryBuilder<T, T, T>(tableClass, this.knex);
+    public query<T>(tableClass: new () => T, granularity?: Granularity): ITypedQueryBuilder<T, T, T> {
+        return new TypedQueryBuilder<T, T, T>(tableClass, granularity, this.knex);
     }
 
     public beginTransaction(): Promise<Knex.Transaction> {
@@ -254,12 +255,28 @@ interface IJoinTableMultipleOnClauses<Model, _SelectableModel, Row> {
         newPropertyClass: new () => NewPropertyType,
         on: (join: IJoinOnClause2<AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, NewPropertyType>) => void
     ): ITypedQueryBuilder<AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, Row>;
+
+    <NewPropertyType, NewPropertyKey extends keyof any>(
+        newPropertyKey: NewPropertyKey,
+        newPropertyClass: new () => NewPropertyType,
+        granularity: Granularity,
+        on: (join: IJoinOnClause2<AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, NewPropertyType>) => void
+    ): ITypedQueryBuilder<AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, Row>;
 }
 
 interface IJoin<Model, _SelectableModel, Row> {
     <NewPropertyType, NewPropertyKey extends keyof any, ConcatKey2 extends keyof NewPropertyType, ConcatKey extends NestedKeysOf<NonNullableRecursive<Model>, keyof NonNullableRecursive<Model>, "">>(
         newPropertyKey: NewPropertyKey,
         newPropertyClass: new () => NewPropertyType,
+        key: ConcatKey2,
+        operator: Operator,
+        key2: ConcatKey
+    ): ITypedQueryBuilder<AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, Row>;
+
+    <NewPropertyType, NewPropertyKey extends keyof any, ConcatKey2 extends keyof NewPropertyType, ConcatKey extends NestedKeysOf<NonNullableRecursive<Model>, keyof NonNullableRecursive<Model>, "">>(
+        newPropertyKey: NewPropertyKey,
+        newPropertyClass: new () => NewPropertyType,
+        granularity: Granularity,
         key: ConcatKey2,
         operator: Operator,
         key2: ConcatKey
@@ -279,7 +296,8 @@ interface ISelectQuery<Model, SelectableModel, Row> {
         name: TName,
         returnType: IConstructor<TReturn>,
         subQueryModel: new () => SubQueryModel,
-        code: (subQuery: ITypedQueryBuilder<SubQueryModel, SubQueryModel, {}>, parent: TransformPropsToFunctionsReturnPropertyName<Model>) => void
+        code: (subQuery: ITypedQueryBuilder<SubQueryModel, SubQueryModel, {}>, parent: TransformPropsToFunctionsReturnPropertyName<Model>) => void,
+        granularity?: Granularity
     ): ITypedQueryBuilder<Model, SelectableModel, Record<TName, ObjectToPrimitive<TReturn>> & Row>;
 }
 
@@ -319,7 +337,7 @@ interface IFindByPrimaryKey<_Model, SelectableModel, Row> {
 }
 
 interface IKeyFunctionAsParametersReturnQueryBuider<Model, SelectableModel, Row> {
-    <ConcatKey extends NestedForeignKeyKeysOf<NonNullableRecursive<Model>, keyof NonNullableRecursive<Model>, "">>(key: ConcatKey): ITypedQueryBuilder<Model, SelectableModel, Row>;
+    <ConcatKey extends NestedForeignKeyKeysOf<NonNullableRecursive<Model>, keyof NonNullableRecursive<Model>, "">>(key: ConcatKey, granularity?: Granularity): ITypedQueryBuilder<Model, SelectableModel, Row>;
 }
 
 interface ISelectableColumnKeyFunctionAsParametersReturnQueryBuider<Model, SelectableModel, Row> {
@@ -374,6 +392,12 @@ interface IWhereExists<Model, SelectableModel, Row> {
         subQueryModel: new () => SubQueryModel,
         code: (subQuery: ITypedQueryBuilder<SubQueryModel, SubQueryModel, {}>, parent: TransformPropsToFunctionsReturnPropertyName<SelectableModel>) => void
     ): ITypedQueryBuilder<Model, SelectableModel, Row>;
+
+    <SubQueryModel>(
+        subQueryModel: new () => SubQueryModel,
+        granularity: Granularity,
+        code: (subQuery: ITypedQueryBuilder<SubQueryModel, SubQueryModel, {}>, parent: TransformPropsToFunctionsReturnPropertyName<SelectableModel>) => void
+    ): ITypedQueryBuilder<Model, SelectableModel, Row>;
 }
 
 interface IWhereParentheses<Model, SelectableModel, Row> {
@@ -382,7 +406,11 @@ interface IWhereParentheses<Model, SelectableModel, Row> {
 
 interface IUnion<Model, SelectableModel, Row> {
     <SubQueryModel>(subQueryModel: new () => SubQueryModel, code: (subQuery: ITypedQueryBuilder<SubQueryModel, SubQueryModel, {}>) => void): ITypedQueryBuilder<Model, SelectableModel, Row>;
+
+    <SubQueryModel>(subQueryModel: new () => SubQueryModel, granularity: Granularity, code: (subQuery: ITypedQueryBuilder<SubQueryModel, SubQueryModel, {}>) => void): ITypedQueryBuilder<Model, SelectableModel, Row>;
 }
+
+type Granularity = "PAGLOCK" | "NOLOCK" | "READCOMMITTEDLOCK" | "ROWLOCK" | "TABLOCK" | "TABLOCKX";
 
 function getProxyAndMemories<ModelType, Row>(typedQueryBuilder?: TypedQueryBuilder<ModelType, Row>) {
     const memories = [] as string[];
@@ -479,19 +507,29 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     private subQueryCounter = 0;
 
-    constructor(private tableClass: new () => ModelType, private knex: Knex, queryBuilder?: Knex.QueryBuilder, private parentTypedQueryBuilder?: any, private subQueryPrefix?: string) {
+    private granularitySet: Set<string> = new Set<Granularity>(["NOLOCK", "PAGLOCK", "READCOMMITTEDLOCK", "ROWLOCK", "TABLOCK", "TABLOCKX"]);
+
+    constructor(
+        private tableClass: new () => ModelType,
+        private granularity: Granularity | undefined,
+        private knex: Knex,
+        queryBuilder?: Knex.QueryBuilder,
+        private parentTypedQueryBuilder?: any,
+        private subQueryPrefix?: string
+    ) {
         this.tableName = getTableName(tableClass);
         this.columns = getColumnProperties(tableClass);
 
+        const granularityQuery = !granularity ? "" : ` WITH (${granularity})`;
         if (queryBuilder !== undefined) {
             this.queryBuilder = queryBuilder;
             if (this.subQueryPrefix) {
-                this.queryBuilder.from({ [`${this.subQueryPrefix}${this.tableName}`]: this.tableName });
+                this.queryBuilder.from(this.knex.raw(`?? as ??${granularityQuery}`, [this.tableName, `${this.subQueryPrefix}${this.tableName}`]));
             } else {
-                this.queryBuilder.from(this.tableName);
+                this.queryBuilder.from(this.knex.raw(`??${granularityQuery}`, [this.tableName]));
             }
         } else {
-            this.queryBuilder = this.knex.from(this.tableName);
+            this.queryBuilder = this.knex.from(this.knex.raw(`??${granularityQuery}`, [this.tableName]));
         }
 
         this.extraJoinedProperties = [];
@@ -534,9 +572,9 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         await this.queryBuilder.del().where(primaryKeyColumnInfo.name, value);
     }
 
-    public async updateItemWithReturning() {
-        const newObject = arguments[0];
-        const returnProperties = arguments[1] as string[] | undefined;
+    public updateItemWithReturning(newObject: Partial<RemoveObjectsFrom<ModelType>>): Promise<RemoveObjectsFrom<ModelType>>;
+    public updateItemWithReturning<Keys extends keyof RemoveObjectsFrom<ModelType>>(newObject: Partial<RemoveObjectsFrom<ModelType>>, keys: Keys[]): Promise<Pick<RemoveObjectsFrom<ModelType>, Keys>>;
+    public async updateItemWithReturning(newObject: Partial<RemoveObjectsFrom<ModelType>>, returnProperties?: (keyof RemoveObjectsFrom<ModelType>)[]) {
         let item = newObject;
         if (beforeUpdateTransform) {
             item = beforeUpdateTransform(newObject, this);
@@ -545,7 +583,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
         const query = this.queryBuilder.update(item);
         if (returnProperties) {
-            const mappedNames = returnProperties.map((columnName) => this.getColumnName(columnName));
+            const mappedNames = returnProperties.map((columnName) => this.getColumnName(columnName as string));
             query.returning(mappedNames);
         } else {
             query.returning("*");
@@ -554,20 +592,20 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         if (this.onlyLogQuery) {
             this.queryLog += query.toQuery() + "\n";
 
-            return {} as any;
+            return {};
         } else {
             const rows = (await query) as any;
             const item = rows[0];
 
             this.mapColumnsToProperties(item);
 
-            return item as any;
+            return item;
         }
     }
 
-    public async insertItemWithReturning() {
-        const newObject = arguments[0];
-        const returnProperties = arguments[1] as string[] | undefined;
+    public insertItemWithReturning(newObject: Partial<RemoveObjectsFrom<ModelType>>): Promise<RemoveObjectsFrom<ModelType>>;
+    public insertItemWithReturning<Keys extends keyof RemoveObjectsFrom<ModelType>>(newObject: Partial<RemoveObjectsFrom<ModelType>>, keys: Keys[]): Promise<Pick<RemoveObjectsFrom<ModelType>, Keys>>;
+    public async insertItemWithReturning(newObject: Partial<RemoveObjectsFrom<ModelType>>, returnProperties?: (keyof RemoveObjectsFrom<ModelType>)[]) {
         let item = newObject;
         if (beforeInsertTransform) {
             item = beforeInsertTransform(newObject, this);
@@ -576,7 +614,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
         const query = this.queryBuilder.insert(item);
         if (returnProperties) {
-            const mappedNames = returnProperties.map((columnName) => this.getColumnName(columnName));
+            const mappedNames = returnProperties.map((columnName) => this.getColumnName(columnName as string));
             query.returning(mappedNames);
         } else {
             query.returning("*");
@@ -585,14 +623,14 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         if (this.onlyLogQuery) {
             this.queryLog += query.toQuery() + "\n";
 
-            return {} as any;
+            return {};
         } else {
             const rows = await query;
             const item = rows[0];
 
             this.mapColumnsToProperties(item);
 
-            return item as any;
+            return item;
         }
     }
 
@@ -721,7 +759,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         return result[0].count;
     }
 
-    public async getFirstOrNull() {
+    public async getFirstOrNull(flattenOption?: FlattenOption) {
         if (this.hasSelectClause === false) {
             this.selectAllModelProperties();
         }
@@ -734,7 +772,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
                 return null;
             }
 
-            return this.flattenByOption(items[0], arguments[0]);
+            return this.flattenByOption(items[0], flattenOption);
         }
     }
     public async getFirstOrUndefined() {
@@ -745,7 +783,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         return firstOrNullResult;
     }
 
-    public async getFirst() {
+    public async getFirst(flattenOption?: FlattenOption) {
         if (this.hasSelectClause === false) {
             this.selectAllModelProperties();
         }
@@ -758,11 +796,11 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
                 throw new Error("Item not found.");
             }
 
-            return this.flattenByOption(items[0], arguments[0]);
+            return this.flattenByOption(items[0], flattenOption);
         }
     }
 
-    public async getSingleOrNull() {
+    public async getSingleOrNull(flattenOption?: FlattenOption) {
         if (this.hasSelectClause === false) {
             this.selectAllModelProperties();
         }
@@ -776,7 +814,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             } else if (items.length > 1) {
                 throw new Error(`More than one item found: ${items.length}.`);
             }
-            return this.flattenByOption(items[0], arguments[0]);
+            return this.flattenByOption(items[0], flattenOption);
         }
     }
 
@@ -788,7 +826,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         return singleOrNullResult;
     }
 
-    public async getSingle() {
+    public async getSingle(flattenOption?: FlattenOption) {
         if (this.hasSelectClause === false) {
             this.selectAllModelProperties();
         }
@@ -802,7 +840,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             } else if (items.length > 1) {
                 throw new Error(`More than one item found: ${items.length}.`);
             }
-            return this.flattenByOption(items[0], arguments[0]);
+            return this.flattenByOption(items[0], flattenOption);
         }
     }
 
@@ -864,7 +902,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         return this as any;
     }
 
-    public async getMany(): Promise<(Row extends ModelType ? RemoveObjectsFrom<ModelType> : Row)[]> {
+    public async getMany(flattenOption?: FlattenOption): Promise<(Row extends ModelType ? RemoveObjectsFrom<ModelType> : Row)[]> {
         if (this.hasSelectClause === false) {
             this.selectAllModelProperties();
         }
@@ -873,7 +911,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             return [];
         } else {
             const items = await this.queryBuilder;
-            return this.flattenByOption(items, arguments[0]) as (Row extends ModelType ? RemoveObjectsFrom<ModelType> : Row)[];
+            return this.flattenByOption(items, flattenOption) as (Row extends ModelType ? RemoveObjectsFrom<ModelType> : Row)[];
         }
     }
 
@@ -886,10 +924,10 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     }
 
     public innerJoinColumn() {
-        return this.joinColumn("innerJoin", arguments[0]);
+        return this.joinColumn("innerJoin", arguments[0], arguments[1]);
     }
     public leftOuterJoinColumn() {
-        return this.joinColumn("leftOuterJoin", arguments[0]);
+        return this.joinColumn("leftOuterJoin", arguments[0], arguments[1]);
     }
 
     public innerJoinTable() {
@@ -917,18 +955,36 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     }
 
     public innerJoin() {
-        return this.join("innerJoin", arguments[0], arguments[1], arguments[2], arguments[3], arguments[4]);
+        const callIncludesGranularity = this.granularitySet.has(arguments[2]);
+        const granularity = callIncludesGranularity ? (arguments[2] as Granularity) : undefined;
+        const joinTableColumnString = callIncludesGranularity ? arguments[3] : arguments[2];
+        const operator = callIncludesGranularity ? arguments[4] : arguments[3];
+        const existingTableColumnString = callIncludesGranularity ? arguments[5] : arguments[4];
+
+        return this.join("innerJoin", arguments[0], arguments[1], granularity, joinTableColumnString, operator, existingTableColumnString);
     }
     public leftOuterJoin() {
-        return this.join("leftOuterJoin", arguments[0], arguments[1], arguments[2], arguments[3], arguments[4]);
+        const callIncludesGranularity = this.granularitySet.has(arguments[2]);
+        const granularity = callIncludesGranularity ? (arguments[2] as Granularity) : undefined;
+        const joinTableColumnString = callIncludesGranularity ? arguments[3] : arguments[2];
+        const operator = callIncludesGranularity ? arguments[4] : arguments[3];
+        const existingTableColumnString = callIncludesGranularity ? arguments[5] : arguments[4];
+
+        return this.join("leftOuterJoin", arguments[0], arguments[1], granularity, joinTableColumnString, operator, existingTableColumnString);
     }
 
     public innerJoinTableOnFunction() {
-        return this.joinTableOnFunction(this.queryBuilder.innerJoin.bind(this.queryBuilder), arguments[0], arguments[1], arguments[2]);
+        const granularity = typeof arguments[2] === "string" ? (arguments[2] as Granularity) : undefined;
+        const on = typeof arguments[2] === "string" ? arguments[3] : arguments[2];
+
+        return this.joinTableOnFunction(this.queryBuilder.innerJoin.bind(this.queryBuilder), arguments[0], arguments[1], granularity, on);
     }
 
     public leftOuterJoinTableOnFunction() {
-        return this.joinTableOnFunction(this.queryBuilder.leftOuterJoin.bind(this.queryBuilder), arguments[0], arguments[1], arguments[2]);
+        const granularity = typeof arguments[2] === "string" ? (arguments[2] as Granularity) : undefined;
+        const on = typeof arguments[2] === "string" ? arguments[3] : arguments[2];
+
+        return this.joinTableOnFunction(this.queryBuilder.leftOuterJoin.bind(this.queryBuilder), arguments[0], arguments[1], granularity, on);
     }
 
     public leftOuterJoinTable() {
@@ -1105,7 +1161,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         return this.callKnexFunctionWithColumnFunction(this.queryBuilder.orWhereNotBetween.bind(this.queryBuilder), ...arguments);
     }
 
-    public callQueryCallbackFunction(functionName: string, typeOfSubQuery: any, functionToCall: any) {
+    public callQueryCallbackFunction(functionName: string, typeOfSubQuery: any, functionToCall: any, granularity: Granularity | undefined) {
         const that = this as any;
         let subQueryPrefix: string | undefined;
         if (["whereExists", "orWhereExists", "whereNotExists", "orWhereNotExists", "havingExists", "havingNotExists"].includes(functionName)) {
@@ -1115,7 +1171,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             const subQuery = this;
             const { root, memories } = getProxyAndMemories(that);
 
-            const subQB = new TypedQueryBuilder(typeOfSubQuery, that.knex, subQuery, that, subQueryPrefix);
+            const subQB = new TypedQueryBuilder(typeOfSubQuery, granularity, that.knex, subQuery, that, subQueryPrefix);
             subQB.extraJoinedProperties = that.extraJoinedProperties;
             functionToCall(subQB, root, memories);
         });
@@ -1126,10 +1182,11 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         const name = arguments[0];
         const typeOfSubQuery = arguments[2];
         const functionToCall = arguments[3];
+        const granularity = arguments[4];
 
         const { root, memories } = getProxyAndMemories(this as any);
 
-        const subQueryBuilder = new TypedQueryBuilder(typeOfSubQuery, this.knex, undefined, this);
+        const subQueryBuilder = new TypedQueryBuilder(typeOfSubQuery, granularity, this.knex, undefined, this);
         functionToCall(subQueryBuilder, root, memories);
 
         (this.selectRaw as any)(name, undefined, subQueryBuilder.toQuery());
@@ -1138,46 +1195,50 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     }
 
     public whereParentheses() {
-        this.callQueryCallbackFunction("where", this.tableClass, arguments[0]);
+        this.callQueryCallbackFunction("where", this.tableClass, arguments[0], undefined);
 
         return this;
     }
     public orWhereParentheses() {
-        this.callQueryCallbackFunction("orWhere", this.tableClass, arguments[0]);
+        this.callQueryCallbackFunction("orWhere", this.tableClass, arguments[0], undefined);
 
         return this;
     }
 
     public whereExists() {
         const typeOfSubQuery = arguments[0];
-        const functionToCall = arguments[1];
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
-        this.callQueryCallbackFunction("whereExists", typeOfSubQuery, functionToCall);
+        this.callQueryCallbackFunction("whereExists", typeOfSubQuery, functionToCall, granularity);
 
         return this;
     }
     public orWhereExists() {
         const typeOfSubQuery = arguments[0];
-        const functionToCall = arguments[1];
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
-        this.callQueryCallbackFunction("orWhereExists", typeOfSubQuery, functionToCall);
+        this.callQueryCallbackFunction("orWhereExists", typeOfSubQuery, functionToCall, granularity);
 
         return this;
     }
 
     public whereNotExists() {
         const typeOfSubQuery = arguments[0];
-        const functionToCall = arguments[1];
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
-        this.callQueryCallbackFunction("whereNotExists", typeOfSubQuery, functionToCall);
+        this.callQueryCallbackFunction("whereNotExists", typeOfSubQuery, functionToCall, granularity);
 
         return this;
     }
     public orWhereNotExists() {
         const typeOfSubQuery = arguments[0];
-        const functionToCall = arguments[1];
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
-        this.callQueryCallbackFunction("orWhereNotExists", typeOfSubQuery, functionToCall);
+        this.callQueryCallbackFunction("orWhereNotExists", typeOfSubQuery, functionToCall, granularity);
 
         return this;
     }
@@ -1218,18 +1279,20 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     public havingExists() {
         const typeOfSubQuery = arguments[0];
-        const functionToCall = arguments[1];
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
-        this.callQueryCallbackFunction("havingExists", typeOfSubQuery, functionToCall);
+        this.callQueryCallbackFunction("havingExists", typeOfSubQuery, functionToCall, granularity);
 
         return this;
     }
 
     public havingNotExists() {
         const typeOfSubQuery = arguments[0];
-        const functionToCall = arguments[1];
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
-        this.callQueryCallbackFunction("havingNotExists", typeOfSubQuery, functionToCall);
+        this.callQueryCallbackFunction("havingNotExists", typeOfSubQuery, functionToCall, granularity);
 
         return this;
     }
@@ -1258,18 +1321,20 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     public union() {
         const typeOfSubQuery = arguments[0];
-        const functionToCall = arguments[1];
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
-        this.callQueryCallbackFunction("union", typeOfSubQuery, functionToCall);
+        this.callQueryCallbackFunction("union", typeOfSubQuery, functionToCall, granularity);
 
         return this;
     }
 
     public unionAll() {
         const typeOfSubQuery = arguments[0];
-        const functionToCall = arguments[1];
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
-        this.callQueryCallbackFunction("unionAll", typeOfSubQuery, functionToCall);
+        this.callQueryCallbackFunction("unionAll", typeOfSubQuery, functionToCall, granularity);
 
         return this;
     }
@@ -1340,7 +1405,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     public async insertSelect() {
         const tableName = getTableName(arguments[0]);
 
-        const typedQueryBuilderForInsert = new TypedQueryBuilder<any, any>(arguments[0], this.knex);
+        const typedQueryBuilderForInsert = new TypedQueryBuilder<any, any>(arguments[0], undefined, this.knex);
         let columnArgumentsList;
         if (typeof arguments[1] === "string") {
             const [, ...columnArguments] = arguments;
@@ -1382,7 +1447,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     public clone() {
         const queryBuilderClone = this.queryBuilder.clone();
 
-        const typedQueryBuilderClone = new TypedQueryBuilder<ModelType, Row>(this.tableClass, this.knex, queryBuilderClone);
+        const typedQueryBuilderClone = new TypedQueryBuilder<ModelType, Row>(this.tableClass, this.granularity, this.knex, queryBuilderClone);
 
         return typedQueryBuilderClone as any;
     }
@@ -1490,7 +1555,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         return this.getColumnNameWithoutAlias(...columnParts);
     }
 
-    private joinColumn(joinType: "innerJoin" | "leftOuterJoin", f: any) {
+    private joinColumn(joinType: "innerJoin" | "leftOuterJoin", f: any, granularity: Granularity | undefined) {
         let columnToJoinArguments: string[];
 
         if (typeof f === "string") {
@@ -1518,11 +1583,13 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         const tableToJoinName = getTableName(secondColumnClass);
         const tableToJoinAlias = `${this.subQueryPrefix ?? ""}${secondColumnAlias}`;
         const tableToJoinJoinColumnName = `${tableToJoinAlias}.${getPrimaryKeyColumn(secondColumnClass).name}`;
+        const granularityQuery = !granularity ? "" : ` WITH (${granularity})`;
 
+        const tableNameRaw = this.knex.raw(`?? as ??${granularityQuery}`, [tableToJoinName, tableToJoinAlias]);
         if (joinType === "innerJoin") {
-            this.queryBuilder.innerJoin(`${tableToJoinName} as ${tableToJoinAlias}`, tableToJoinJoinColumnName, columnToJoinName);
+            this.queryBuilder.innerJoin(tableNameRaw, tableToJoinJoinColumnName, columnToJoinName);
         } else if (joinType === "leftOuterJoin") {
-            this.queryBuilder.leftOuterJoin(`${tableToJoinName} as ${tableToJoinAlias}`, tableToJoinJoinColumnName, columnToJoinName);
+            this.queryBuilder.leftOuterJoin(tableNameRaw, tableToJoinJoinColumnName, columnToJoinName);
         }
 
         return this;
@@ -1585,7 +1652,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         return setToNull(unflattened);
     }
 
-    private joinTableOnFunction(queryBuilderJoin: Knex.Join, newPropertyKey: any, newPropertyType: any, onFunction: (join: IJoinOnClause2<any, any>) => void) {
+    private joinTableOnFunction(queryBuilderJoin: Knex.Join, newPropertyKey: any, newPropertyType: any, granularity: Granularity | undefined, onFunction: (join: IJoinOnClause2<any, any>) => void) {
         this.extraJoinedProperties.push({
             name: newPropertyKey,
             propertyType: newPropertyType,
@@ -1594,9 +1661,11 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         const tableToJoinClass = newPropertyType;
         const tableToJoinName = getTableName(tableToJoinClass);
         const tableToJoinAlias = newPropertyKey;
+        const granularityQuery = !granularity ? "" : ` WITH (${granularity})`;
 
         let knexOnObject: any;
-        queryBuilderJoin(`${tableToJoinName} as ${tableToJoinAlias}`, function () {
+        const tableNameRaw = this.knex.raw(`?? as ??${granularityQuery}`, [tableToJoinName, tableToJoinAlias]);
+        queryBuilderJoin(tableNameRaw, function () {
             knexOnObject = this;
         });
 
@@ -1695,7 +1764,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         }
     }
 
-    private join(joinFunctionName: string, tableToJoinAlias: any, tableToJoinClass: any, joinTableColumnString: any, operator: any, existingTableColumnString: any) {
+    private join(joinFunctionName: string, tableToJoinAlias: any, tableToJoinClass: any, granularity: Granularity | undefined, joinTableColumnString: any, operator: any, existingTableColumnString: any) {
         this.extraJoinedProperties.push({
             name: tableToJoinAlias,
             propertyType: tableToJoinClass,
@@ -1711,7 +1780,10 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
         const existingTableColumnName = this.getColumnName(...existingTableColumnString.split("."));
 
-        (this.queryBuilder as any)[joinFunctionName](`${tableToJoinName} as ${tableToJoinAliasWithUnderscores}`, joinTableColumnArguments, operator, existingTableColumnName);
+        const granularityQuery = !granularity ? "" : ` WITH (${granularity})`;
+        const tableNameRaw = this.knex.raw(`?? as ??${granularityQuery}`, [tableToJoinName, tableToJoinAliasWithUnderscores]);
+
+        (this.queryBuilder as any)[joinFunctionName](tableNameRaw, joinTableColumnArguments, operator, existingTableColumnName);
 
         return this as any;
     }
