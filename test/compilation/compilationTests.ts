@@ -965,4 +965,112 @@ describe("compile time typed-knex string column parameters", function () {
 
         done();
     });
+
+    it("should accept granularity property in query", (done) => {
+        const allDiagnostics = getDiagnostics(`
+            import { knex } from 'knex';
+
+            import { TypedKnex } from '../src/typedKnex';
+            import { User } from './testTables';
+
+            (async () => {
+
+                const typedKnex = new TypedKnex(knex({ client: 'postgresql' }));
+                const result = await typedKnex
+                    .query(User, 'NOLOCK')
+                    .select('id')
+                    .getFirst();
+
+                console.log(result.id);
+
+            })();
+        `);
+
+        assert.equal(allDiagnostics.length, 0);
+
+        done();
+    });
+
+    it("should accept granularity property in leftOuterJoinTableOnFunction", (done) => {
+        const allDiagnostics = getDiagnostics(`
+            import { knex } from 'knex';
+
+            import { TypedKnex } from '../src/typedKnex';
+            import { User, UserSetting } from './testTables';
+
+            (async () => {
+
+                const typedKnex = new TypedKnex(knex({ client: 'postgresql' }));
+
+                const item = await typedKnex
+                    .query(UserSetting)
+                    .leftOuterJoinTableOnFunction('otherUser', User, 'NOLOCK', join => {
+                        join.on('id', '=', 'user2Id');
+                    })
+                    .select('otherUser.name', 'user2.numericValue')
+                    .getFirst();
+
+                if (item !== undefined) {
+                    console.log(item.user2.numericValue);
+                    console.log(item.otherUser.name);
+                }
+
+            })();
+        `);
+        assert.equal(allDiagnostics.length, 0);
+
+        done();
+    });
+
+    it("should accept granularity property in leftOuterJoin", (done) => {
+        const allDiagnostics = getDiagnostics(`
+            import { knex } from 'knex';
+
+            import { TypedKnex } from '../src/typedKnex';
+            import { User, UserSetting } from './testTables';
+
+            (async () => {
+
+                const typedKnex = new TypedKnex(knex({ client: 'postgresql' }));
+
+                const item = await typedKnex
+                    .query(UserSetting)
+                    .leftOuterJoin('otherUser', User, 'NOLOCK', 'status', '=', 'otherValue')
+                    .leftOuterJoin('otherUser.otherOtherUser', User, 'status', '=', 'otherUser.status')
+                    .select('otherUser.otherOtherUser.name')
+                    .getFirst();
+
+                if (item !== undefined) {
+                    console.log(item.otherUser.otherOtherUser.name);
+                }
+
+            })();
+        `);
+
+        assert.equal(allDiagnostics.length, 0);
+
+        done();
+    });
+
+    it("should accept granularity property in whereExists", (done) => {
+        const allDiagnostics = getDiagnostics(`
+            import { knex } from 'knex';
+
+            import { TypedKnex } from '../src/typedKnex';
+            import { User, UserSetting } from './testTables';
+
+            (async () => {
+
+                const query = typedKnex
+                    .query(User)
+                    .whereExists(UserSetting, 'NOLOCK', (subQuery) => {
+                        subQuery.whereColumns('user.id', '=', 'someValue');
+                    });
+            })();
+        `);
+
+        assert.notEqual(allDiagnostics.length, 0);
+
+        done();
+    });
 });

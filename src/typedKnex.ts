@@ -1585,10 +1585,11 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         const tableToJoinJoinColumnName = `${tableToJoinAlias}.${getPrimaryKeyColumn(secondColumnClass).name}`;
         const granularityQuery = !granularity ? "" : ` WITH (${granularity})`;
 
+        const tableNameRaw = this.knex.raw(`?? as ??${granularityQuery}`, [tableToJoinName, tableToJoinAlias]);
         if (joinType === "innerJoin") {
-            this.queryBuilder.innerJoin(`${tableToJoinName} as ${tableToJoinAlias}${granularityQuery}`, tableToJoinJoinColumnName, columnToJoinName);
+            this.queryBuilder.innerJoin(tableNameRaw, tableToJoinJoinColumnName, columnToJoinName);
         } else if (joinType === "leftOuterJoin") {
-            this.queryBuilder.leftOuterJoin(`${tableToJoinName} as ${tableToJoinAlias}${granularityQuery}`, tableToJoinJoinColumnName, columnToJoinName);
+            this.queryBuilder.leftOuterJoin(tableNameRaw, tableToJoinJoinColumnName, columnToJoinName);
         }
 
         return this;
@@ -1663,7 +1664,8 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         const granularityQuery = !granularity ? "" : ` WITH (${granularity})`;
 
         let knexOnObject: any;
-        queryBuilderJoin(`${tableToJoinName} as ${tableToJoinAlias}${granularityQuery}`, function () {
+        const tableNameRaw = this.knex.raw(`?? as ??${granularityQuery}`, [tableToJoinName, tableToJoinAlias]);
+        queryBuilderJoin(tableNameRaw, function () {
             knexOnObject = this;
         });
 
@@ -1779,8 +1781,9 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         const existingTableColumnName = this.getColumnName(...existingTableColumnString.split("."));
 
         const granularityQuery = !granularity ? "" : ` WITH (${granularity})`;
+        const tableNameRaw = this.knex.raw(`?? as ??${granularityQuery}`, [tableToJoinName, tableToJoinAliasWithUnderscores]);
 
-        (this.queryBuilder as any)[joinFunctionName](`${tableToJoinName} as ${tableToJoinAliasWithUnderscores}${granularityQuery}`, joinTableColumnArguments, operator, existingTableColumnName);
+        (this.queryBuilder as any)[joinFunctionName](tableNameRaw, joinTableColumnArguments, operator, existingTableColumnName);
 
         return this as any;
     }

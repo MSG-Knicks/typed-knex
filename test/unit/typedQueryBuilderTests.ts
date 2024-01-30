@@ -98,6 +98,16 @@ describe("TypedKnexQueryBuilder", () => {
         done();
     });
 
+    it("should add granularity to from clause in query", (done) => {
+        const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
+        const query = typedKnex.query(User, "NOLOCK").select("id", "name");
+
+        const queryString = query.toQuery();
+        assert.equal(queryString, 'select "users"."id" as "id", "users"."name" as "name" from "users" WITH (NOLOCK)');
+
+        done();
+    });
+
     it("should join a table", (done) => {
         const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
         const query = typedKnex.query(UserSetting).innerJoinColumn("user");
@@ -121,6 +131,15 @@ describe("TypedKnexQueryBuilder", () => {
         const query = typedKnex.query(UserSetting).where("user.name", "user1").innerJoinColumn("user");
         const queryString = query.toQuery();
         assert.equal(queryString, 'select * from "userSettings" inner join "users" as "user" on "user"."id" = "userSettings"."userId" where "user"."name" = \'user1\'');
+
+        done();
+    });
+
+    it("should add granularity to join clause in query on a column of joined table", (done) => {
+        const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
+        const query = typedKnex.query(UserSetting).where("user.name", "user1").innerJoinColumn("user", "NOLOCK");
+        const queryString = query.toQuery();
+        assert.equal(queryString, 'select * from "userSettings" inner join "users" as "user" WITH (NOLOCK) on "user"."id" = "userSettings"."userId" where "user"."name" = \'user1\'');
 
         done();
     });
@@ -271,6 +290,16 @@ describe("TypedKnexQueryBuilder", () => {
         done();
     });
 
+    it("should add granularity to inner join with function with other table", (done) => {
+        const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
+        const query = typedKnex.query(UserSetting, "ROWLOCK").innerJoin("otherUser", User, "NOLOCK", "nickName", "=", "value");
+
+        const queryString = query.toQuery();
+        assert.equal(queryString, 'select * from "userSettings" WITH (ROWLOCK) inner join "users" as "otherUser" WITH (NOLOCK) on "otherUser"."nickName" = "userSettings"."value"');
+
+        done();
+    });
+
     it("should left outer join with other table", (done) => {
         const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
         const query = typedKnex.query(UserSetting).leftOuterJoin("otherUser", User, "nickName", "=", "value");
@@ -287,6 +316,16 @@ describe("TypedKnexQueryBuilder", () => {
 
         const queryString = query.toQuery();
         assert.equal(queryString, 'select * from "userSettings" left outer join "users" as "otherUser" on "otherUser"."weirdDatabaseName" = "userSettings"."other_value"');
+
+        done();
+    });
+
+    it("should add granularity to left outer join with other table", (done) => {
+        const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
+        const query = typedKnex.query(UserSetting).leftOuterJoin("otherUser", User, "NOLOCK", "nickName", "=", "value");
+
+        const queryString = query.toQuery();
+        assert.equal(queryString, 'select * from "userSettings" left outer join "users" as "otherUser" WITH (NOLOCK) on "otherUser"."nickName" = "userSettings"."value"');
 
         done();
     });
@@ -412,6 +451,18 @@ describe("TypedKnexQueryBuilder", () => {
 
         const queryString = query.toQuery();
         assert.equal(queryString, `select * from "users" where exists (select * from "userSettings" as "subquery0$userSettings" where "subquery0$userSettings"."userId" = "users"."id")`);
+
+        done();
+    });
+
+    it("should add granularity to where exists query", (done) => {
+        const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
+        const query = typedKnex.query(User).whereExists(UserSetting, "NOLOCK", (subQuery) => {
+            subQuery.whereColumn("userId", "=", "id");
+        });
+
+        const queryString = query.toQuery();
+        assert.equal(queryString, `select * from "users" where exists (select * from "userSettings" as "subquery0$userSettings" WITH (NOLOCK) where "subquery0$userSettings"."userId" = "users"."id")`);
 
         done();
     });
@@ -613,6 +664,21 @@ describe("TypedKnexQueryBuilder", () => {
         done();
     });
 
+    it("should add granularity to a union query", (done) => {
+        const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
+        const query = typedKnex
+            .query(User)
+            .select("id")
+            .union(User, "ROWLOCK", (subQuery) => {
+                subQuery.select("id").where("numericValue", 12);
+            });
+
+        const queryString = query.toQuery();
+        assert.equal(queryString, 'select "users"."id" as "id" from "users" union select "users"."id" as "id" from "users" WITH (ROWLOCK) where "users"."numericValue" = 12');
+
+        done();
+    });
+
     it("should create query with an union all", (done) => {
         const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
         const query = typedKnex
@@ -624,6 +690,21 @@ describe("TypedKnexQueryBuilder", () => {
 
         const queryString = query.toQuery();
         assert.equal(queryString, 'select "users"."id" as "id" from "users" union all select "users"."id" as "id" from "users" where "users"."numericValue" = 12');
+
+        done();
+    });
+
+    it("should add granularity to a union all query", (done) => {
+        const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
+        const query = typedKnex
+            .query(User, "NOLOCK")
+            .select("id")
+            .unionAll(User, "NOLOCK", (subQuery) => {
+                subQuery.select("id").where("numericValue", 12);
+            });
+
+        const queryString = query.toQuery();
+        assert.equal(queryString, 'select "users"."id" as "id" from "users" WITH (NOLOCK) union all select "users"."id" as "id" from "users" WITH (NOLOCK) where "users"."numericValue" = 12');
 
         done();
     });
@@ -761,6 +842,21 @@ describe("TypedKnexQueryBuilder", () => {
         done();
     });
 
+    it("should maintain granularity to clone", (done) => {
+        const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
+
+        const query = typedKnex.query(User, "NOLOCK").select("id");
+
+        const clonedQuery = query.clone();
+
+        clonedQuery.select("name");
+
+        assert.equal(query.toQuery(), 'select "users"."id" as "id" from "users" WITH (NOLOCK)');
+        assert.equal(clonedQuery.toQuery(), 'select "users"."id" as "id", "users"."name" as "name" from "users" WITH (NOLOCK)');
+
+        done();
+    });
+
     it("should create query with groupby raw", (done) => {
         const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
         const query = typedKnex.query(User).groupByRaw("year WITH ROLLUP");
@@ -876,6 +972,15 @@ describe("TypedKnexQueryBuilder", () => {
         done();
     });
 
+    it("should add granularity to left outer column join", (done) => {
+        const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
+        const query = typedKnex.query(UserSetting).leftOuterJoinColumn("user", "ROWLOCK");
+        const queryString = query.toQuery();
+        assert.equal(queryString, 'select * from "userSettings" left outer join "users" as "user" WITH (ROWLOCK) on "user"."id" = "userSettings"."userId"');
+
+        done();
+    });
+
     it("should return camelCase correctly", (done) => {
         const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
         const query = typedKnex.query(UserSetting).select("initialValue");
@@ -976,6 +1081,18 @@ describe("TypedKnexQueryBuilder", () => {
 
         const queryString = query.toQuery();
         assert.equal(queryString, 'select * from "userCategories" left outer join "regions" as "specialRegion" on "userCategories"."INTERNAL_NAME" = "specialRegion"."id"');
+
+        done();
+    });
+
+    it("should add granularity to left outer join with function with other table", (done) => {
+        const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
+        const query = typedKnex.query(UserSetting).leftOuterJoinTableOnFunction("otherUser", User, "NOLOCK", (join) => {
+            join.on("id", "=", "user2Id").onNull("name");
+        });
+
+        const queryString = query.toQuery();
+        assert.equal(queryString, 'select * from "userSettings" left outer join "users" as "otherUser" WITH (NOLOCK) on "userSettings"."user2Id" = "otherUser"."id" and "otherUser"."name" is null');
 
         done();
     });
