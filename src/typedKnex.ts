@@ -17,6 +17,12 @@ export class TypedKnex {
         return new TypedQueryBuilder<T, T, T>(tableClass, granularity, this.knex);
     }
 
+    public with<T, U, V>(cteTableClass: new () => T, cteQuery: (queryBuilder: TypedKnexCTEQueryBuilder) => ITypedQueryBuilder<U, V, T>): TypedKnexQueryBuilder {
+        const alias = getTableName(cteTableClass);
+        const qb = this.knex.with(alias, (w) => cteQuery(new TypedKnexCTEQueryBuilder(this.knex, w)));
+        return new TypedKnexQueryBuilder(this.knex, qb);
+    }
+
     public beginTransaction(): Promise<Knex.Transaction> {
         return new Promise((resolve) => {
             this.knex
@@ -24,6 +30,22 @@ export class TypedKnex {
                 // If this error is not caught here, it will throw, resulting in an unhandledRejection
                 .catch((_e) => {});
         });
+    }
+}
+
+class TypedKnexCTEQueryBuilder {
+    constructor(protected knex: Knex, protected queryBuilder: Knex.QueryBuilder) {}
+
+    public query<T>(tableClass: new () => T, granularity?: Granularity): ITypedQueryBuilder<T, T, T> {
+        return new TypedQueryBuilder<T, T, T>(tableClass, granularity, this.knex, this.queryBuilder);
+    }
+}
+
+class TypedKnexQueryBuilder extends TypedKnexCTEQueryBuilder {
+    public with<T, U, V>(cteTableClass: new () => T, cteQuery: (queryBuilder: TypedKnexCTEQueryBuilder) => ITypedQueryBuilder<U, V, T>): TypedKnexQueryBuilder {
+        const alias = getTableName(cteTableClass);
+        const qb = this.queryBuilder.with(alias, (w) => cteQuery(new TypedKnexCTEQueryBuilder(this.knex, w)));
+        return new TypedKnexQueryBuilder(this.knex, qb);
     }
 }
 
@@ -81,6 +103,7 @@ export interface ITypedQueryBuilder<Model, SelectableModel, Row> {
     innerJoin: IJoin<Model, SelectableModel, Row extends Model ? {} : Row>;
     leftOuterJoin: IJoin<Model, SelectableModel, Row extends Model ? {} : Row>;
 
+    selectAlias: ISelectAlias<Model, SelectableModel, Row extends Model ? {} : Row>;
     selectRaw: ISelectRaw<Model, SelectableModel, Row extends Model ? {} : Row>;
 
     findByPrimaryKey: IFindByPrimaryKey<Model, SelectableModel, Row extends Model ? {} : Row>;
@@ -281,6 +304,14 @@ interface IJoin<Model, _SelectableModel, Row> {
         operator: Operator,
         key2: ConcatKey
     ): ITypedQueryBuilder<AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, Row>;
+}
+
+interface ISelectAlias<Model, SelectableModel, Row> {
+    <ConcatKey extends NestedKeysOf<NonNullableRecursive<SelectableModel>, keyof NonNullableRecursive<SelectableModel>, "">, TName extends keyof any>(alias: TName, columnName: ConcatKey): ITypedQueryBuilder<
+        Model,
+        SelectableModel,
+        Record<TName, GetNestedPropertyType<SelectableModel, ConcatKey>> & Row
+    >;
 }
 
 interface ISelectRaw<Model, SelectableModel, Row> {
@@ -913,6 +944,14 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             const items = await this.queryBuilder;
             return this.flattenByOption(items, flattenOption) as (Row extends ModelType ? RemoveObjectsFrom<ModelType> : Row)[];
         }
+    }
+
+    public selectAlias() {
+        this.hasSelectClause = true;
+        const columnArguments = arguments[1].split(".");
+
+        this.queryBuilder.select(`${this.getColumnName(...columnArguments)} as ${arguments[0]}`);
+        return this as any;
     }
 
     public selectRaw() {
