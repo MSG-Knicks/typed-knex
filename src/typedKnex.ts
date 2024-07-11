@@ -11,18 +11,18 @@ import { SelectableColumnTypes } from "./SelectableColumnTypes";
 import { FlattenOption, setToNull, unflatten } from "./unflatten";
 
 export class TypedKnex {
-    constructor(private knex: Knex, private queryBuilder?: Knex.QueryBuilder) {}
+    constructor(private knex: Knex) {}
 
     public query<T>(tableClass: new () => T, granularity?: Granularity): ITypedQueryBuilder<T, T, T> {
-        return new TypedQueryBuilder<T, T, T>(tableClass, granularity, this.knex, this.queryBuilder);
+        return new TypedQueryBuilder<T, T, T>(tableClass, granularity, this.knex);
     }
 
-    public with<T, U, V>(alias: string, tableClass: new () => T, cteQuery: (queryBuilder: ITypedQueryBuilder<T, T, T>) => ITypedQueryBuilder<U, U, V>, granularity?: Granularity): TypedKnex {
-        const qb = (this.queryBuilder || this.knex).with(alias, (qb) => {
+    public with<T, U, V>(alias: string, tableClass: new () => T, cteQuery: (queryBuilder: ITypedQueryBuilder<T, T, T>) => ITypedQueryBuilder<U, U, V>, granularity?: Granularity): TypedKnexQueryBuilder {
+        const qb = this.knex.with(alias, (qb) => {
             const typedQueryBuilder = new TypedQueryBuilder<T, T, T>(tableClass, granularity, this.knex, qb);
             return cteQuery(typedQueryBuilder);
         });
-        return new TypedKnex(this.knex, qb);
+        return new TypedKnexQueryBuilder(this.knex, qb);
     }
 
     public beginTransaction(): Promise<Knex.Transaction> {
@@ -32,6 +32,22 @@ export class TypedKnex {
                 // If this error is not caught here, it will throw, resulting in an unhandledRejection
                 .catch((_e) => {});
         });
+    }
+}
+
+class TypedKnexQueryBuilder {
+    constructor(private knex: Knex, private queryBuilder: Knex.QueryBuilder) {}
+
+    public query<T>(tableClass: new () => T, granularity?: Granularity): ITypedQueryBuilder<T, T, T> {
+        return new TypedQueryBuilder<T, T, T>(tableClass, granularity, this.knex, this.queryBuilder);
+    }
+
+    public with<T, U, V>(alias: string, tableClass: new () => T, cteQuery: (queryBuilder: ITypedQueryBuilder<T, T, T>) => ITypedQueryBuilder<U, U, V>, granularity?: Granularity): TypedKnexQueryBuilder {
+        const qb = this.queryBuilder.with(alias, (qb) => {
+            const typedQueryBuilder = new TypedQueryBuilder<T, T, T>(tableClass, granularity, this.knex, qb);
+            return cteQuery(typedQueryBuilder);
+        });
+        return new TypedKnexQueryBuilder(this.knex, qb);
     }
 }
 
