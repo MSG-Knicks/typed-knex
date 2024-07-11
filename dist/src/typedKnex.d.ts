@@ -11,7 +11,17 @@ export declare class TypedKnex {
     private knex;
     constructor(knex: Knex);
     query<T>(tableClass: new () => T, granularity?: Granularity): ITypedQueryBuilder<T, T, T>;
+    with<T, U, V>(cteTableClass: new () => T, cteQuery: (queryBuilder: TypedKnexCTEQueryBuilder) => ITypedQueryBuilder<U, V, T>): TypedKnexQueryBuilder;
     beginTransaction(): Promise<Knex.Transaction>;
+}
+declare class TypedKnexCTEQueryBuilder {
+    protected knex: Knex;
+    protected queryBuilder: Knex.QueryBuilder;
+    constructor(knex: Knex, queryBuilder: Knex.QueryBuilder);
+    query<T>(tableClass: new () => T, granularity?: Granularity): ITypedQueryBuilder<T, T, T>;
+}
+declare class TypedKnexQueryBuilder extends TypedKnexCTEQueryBuilder {
+    with<T, U, V>(cteTableClass: new () => T, cteQuery: (queryBuilder: TypedKnexCTEQueryBuilder) => ITypedQueryBuilder<U, V, T>): TypedKnexQueryBuilder;
 }
 export declare function registerBeforeInsertTransform<T>(f: (item: T, typedQueryBuilder: ITypedQueryBuilder<{}, {}, {}>) => T): void;
 export declare function registerBeforeUpdateTransform<T>(f: (item: T, typedQueryBuilder: ITypedQueryBuilder<{}, {}, {}>) => T): void;
@@ -42,6 +52,7 @@ export interface ITypedQueryBuilder<Model, SelectableModel, Row> {
     innerJoinTableOnFunction: IJoinTableMultipleOnClauses<Model, SelectableModel, Row extends Model ? {} : Row>;
     innerJoin: IJoin<Model, SelectableModel, Row extends Model ? {} : Row>;
     leftOuterJoin: IJoin<Model, SelectableModel, Row extends Model ? {} : Row>;
+    selectAlias: ISelectAlias<Model, SelectableModel, Row extends Model ? {} : Row>;
     selectRaw: ISelectRaw<Model, SelectableModel, Row extends Model ? {} : Row>;
     findByPrimaryKey: IFindByPrimaryKey<Model, SelectableModel, Row extends Model ? {} : Row>;
     whereIn: IWhereIn<Model, SelectableModel, Row>;
@@ -169,6 +180,9 @@ interface IJoin<Model, _SelectableModel, Row> {
     <NewPropertyType, NewPropertyKey extends keyof any, ConcatKey2 extends keyof NewPropertyType, ConcatKey extends NestedKeysOf<NonNullableRecursive<Model>, keyof NonNullableRecursive<Model>, "">>(newPropertyKey: NewPropertyKey, newPropertyClass: new () => NewPropertyType, key: ConcatKey2, operator: Operator, key2: ConcatKey): ITypedQueryBuilder<AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, Row>;
     <NewPropertyType, NewPropertyKey extends keyof any, ConcatKey2 extends keyof NewPropertyType, ConcatKey extends NestedKeysOf<NonNullableRecursive<Model>, keyof NonNullableRecursive<Model>, "">>(newPropertyKey: NewPropertyKey, newPropertyClass: new () => NewPropertyType, granularity: Granularity, key: ConcatKey2, operator: Operator, key2: ConcatKey): ITypedQueryBuilder<AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, AddPropertyWithType<Model, NewPropertyKey, NewPropertyType>, Row>;
 }
+interface ISelectAlias<Model, SelectableModel, Row> {
+    <ConcatKey extends NestedKeysOf<NonNullableRecursive<SelectableModel>, keyof NonNullableRecursive<SelectableModel>, "">, TName extends keyof any>(alias: TName, columnName: ConcatKey): ITypedQueryBuilder<Model, SelectableModel, Record<TName, GetNestedPropertyType<SelectableModel, ConcatKey>> & Row>;
+}
 interface ISelectRaw<Model, SelectableModel, Row> {
     <TReturn extends Boolean | String | Number, TName extends keyof any>(name: TName, returnType: IConstructor<TReturn>, query: string, ...bindings: string[]): ITypedQueryBuilder<Model, SelectableModel, Record<TName, ObjectToPrimitive<TReturn>> & Row>;
 }
@@ -285,6 +299,7 @@ export declare class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> imp
     select(): any;
     orderBy(): any;
     getMany(flattenOption?: FlattenOption): Promise<(Row extends ModelType ? RemoveObjectsFrom<ModelType> : Row)[]>;
+    selectAlias(): any;
     selectRaw(): any;
     innerJoinColumn(): this;
     leftOuterJoinColumn(): this;
