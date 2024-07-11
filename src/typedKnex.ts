@@ -17,7 +17,7 @@ export class TypedKnex {
         return new TypedQueryBuilder<T, T, T>(tableClass, granularity, this.knex);
     }
 
-    public with<T>(cteTableClass: new () => T, cteQuery: (queryBuilder: TypedKnexCTEQueryBuilder) => ITypedQueryBuilder<any, any, T>): TypedKnexQueryBuilder {
+    public with<T, U, V>(cteTableClass: new () => T, cteQuery: (queryBuilder: TypedKnexCTEQueryBuilder) => ITypedQueryBuilder<U, V, T>): TypedKnexQueryBuilder {
         const alias = getTableName(cteTableClass);
         const qb = this.knex.with(alias, (w) => cteQuery(new TypedKnexCTEQueryBuilder(this.knex, w)));
         return new TypedKnexQueryBuilder(this.knex, qb);
@@ -42,7 +42,7 @@ class TypedKnexCTEQueryBuilder {
 }
 
 class TypedKnexQueryBuilder extends TypedKnexCTEQueryBuilder {
-    public with<T>(cteTableClass: new () => T, cteQuery: (queryBuilder: TypedKnexCTEQueryBuilder) => ITypedQueryBuilder<any, any, T>): TypedKnexQueryBuilder {
+    public with<T, U, V>(cteTableClass: new () => T, cteQuery: (queryBuilder: TypedKnexCTEQueryBuilder) => ITypedQueryBuilder<U, V, T>): TypedKnexQueryBuilder {
         const alias = getTableName(cteTableClass);
         const qb = this.queryBuilder.with(alias, (w) => cteQuery(new TypedKnexCTEQueryBuilder(this.knex, w)));
         return new TypedKnexQueryBuilder(this.knex, qb);
