@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import type { Granularity } from "./typedKnex";
 
 interface IColumnData {
     name: string;
@@ -11,10 +12,13 @@ interface IColumnData {
     designType: any;
 }
 
-const tables = [] as {
+type TableMetadata = {
     tableName: string;
+    defaultLock: Granularity | undefined;
+};
+const tables = [] as (TableMetadata & {
     tableClass: Function;
-}[];
+})[];
 
 /**
  * @deprecated use `getTables`.
@@ -27,12 +31,12 @@ export function getTables() {
     return tables;
 }
 
-export function Table(tableName?: string) {
+export function Table(tableName?: string, defaultLock?: Granularity) {
     return (target: Function) => {
         target.prototype.tableMetadataKey = Symbol("table");
-        Reflect.metadata(target.prototype.tableMetadataKey, { tableName: tableName ?? target.name })(target);
+        Reflect.metadata(target.prototype.tableMetadataKey, { tableName: tableName ?? target.name, defaultLock })(target);
 
-        tables.push({ tableName: tableName ?? target.name, tableClass: target });
+        tables.push({ tableName: tableName ?? target.name, tableClass: target, defaultLock });
     };
 }
 
@@ -41,7 +45,7 @@ export function Table(tableName?: string) {
  */
 export const Entity = Table;
 
-export function getTableMetadata(tableClass: Function): { tableName: string } {
+export function getTableMetadata(tableClass: Function): TableMetadata {
     return Reflect.getMetadata(tableClass.prototype.tableMetadataKey, tableClass);
 }
 

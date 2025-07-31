@@ -1,6 +1,6 @@
 /* eslint-disable prefer-rest-params, no-unused-vars */
 import { Knex } from "knex";
-import { getColumnInformation, getColumnProperties, getPrimaryKeyColumn, getTableName } from "./decorators";
+import { getColumnInformation, getColumnProperties, getPrimaryKeyColumn, getTableMetadata, getTableName } from "./decorators";
 import { NestedForeignKeyKeysOf, NestedKeysOf } from "./NestedKeysOf";
 import { NestedRecord } from "./NestedRecord";
 import { NonForeignKeyObjects } from "./NonForeignKeyObjects";
@@ -441,7 +441,7 @@ interface IUnion<Model, SelectableModel, Row> {
     <SubQueryModel>(subQueryModel: new () => SubQueryModel, granularity: Granularity, code: (subQuery: ITypedQueryBuilder<SubQueryModel, SubQueryModel, {}>) => void): ITypedQueryBuilder<Model, SelectableModel, Row>;
 }
 
-type Granularity = "PAGLOCK" | "NOLOCK" | "READCOMMITTEDLOCK" | "ROWLOCK" | "TABLOCK" | "TABLOCKX";
+export type Granularity = "PAGLOCK" | "NOLOCK" | "READCOMMITTEDLOCK" | "ROWLOCK" | "TABLOCK" | "TABLOCKX";
 
 function getProxyAndMemories<ModelType, Row>(typedQueryBuilder?: TypedQueryBuilder<ModelType, Row>) {
     const memories = [] as string[];
@@ -934,6 +934,8 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     }
 
     public async getMany(flattenOption?: FlattenOption): Promise<(Row extends ModelType ? RemoveObjectsFrom<ModelType> : Row)[]> {
+        // attach any default locks to the query if they are not specified
+
         if (this.hasSelectClause === false) {
             this.selectAllModelProperties();
         }
@@ -995,7 +997,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     public innerJoin() {
         const callIncludesGranularity = this.granularitySet.has(arguments[2]);
-        const granularity = callIncludesGranularity ? (arguments[2] as Granularity) : undefined;
+        const granularity = callIncludesGranularity ? (arguments[2] as Granularity) : getTableMetadata(arguments[1]).defaultLock;
         const joinTableColumnString = callIncludesGranularity ? arguments[3] : arguments[2];
         const operator = callIncludesGranularity ? arguments[4] : arguments[3];
         const existingTableColumnString = callIncludesGranularity ? arguments[5] : arguments[4];
@@ -1004,7 +1006,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     }
     public leftOuterJoin() {
         const callIncludesGranularity = this.granularitySet.has(arguments[2]);
-        const granularity = callIncludesGranularity ? (arguments[2] as Granularity) : undefined;
+        const granularity = callIncludesGranularity ? (arguments[2] as Granularity) : getTableMetadata(arguments[1]).defaultLock;
         const joinTableColumnString = callIncludesGranularity ? arguments[3] : arguments[2];
         const operator = callIncludesGranularity ? arguments[4] : arguments[3];
         const existingTableColumnString = callIncludesGranularity ? arguments[5] : arguments[4];
@@ -1013,14 +1015,14 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     }
 
     public innerJoinTableOnFunction() {
-        const granularity = typeof arguments[2] === "string" ? (arguments[2] as Granularity) : undefined;
+        const granularity = typeof arguments[2] === "string" ? (arguments[2] as Granularity) : getTableMetadata(arguments[1]).defaultLock;
         const on = typeof arguments[2] === "string" ? arguments[3] : arguments[2];
 
         return this.joinTableOnFunction(this.queryBuilder.innerJoin.bind(this.queryBuilder), arguments[0], arguments[1], granularity, on);
     }
 
     public leftOuterJoinTableOnFunction() {
-        const granularity = typeof arguments[2] === "string" ? (arguments[2] as Granularity) : undefined;
+        const granularity = typeof arguments[2] === "string" ? (arguments[2] as Granularity) : getTableMetadata(arguments[1]).defaultLock;
         const on = typeof arguments[2] === "string" ? arguments[3] : arguments[2];
 
         return this.joinTableOnFunction(this.queryBuilder.leftOuterJoin.bind(this.queryBuilder), arguments[0], arguments[1], granularity, on);
@@ -1221,7 +1223,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         const name = arguments[0];
         const typeOfSubQuery = arguments[2];
         const functionToCall = arguments[3];
-        const granularity = arguments[4];
+        const granularity = arguments[4] ?? getTableMetadata(typeOfSubQuery).defaultLock;
 
         const { root, memories } = getProxyAndMemories(this as any);
 
@@ -1246,7 +1248,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     public whereExists() {
         const typeOfSubQuery = arguments[0];
-        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : getTableMetadata(arguments[0]).defaultLock;
         const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
         this.callQueryCallbackFunction("whereExists", typeOfSubQuery, functionToCall, granularity);
@@ -1255,7 +1257,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     }
     public orWhereExists() {
         const typeOfSubQuery = arguments[0];
-        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : getTableMetadata(arguments[0]).defaultLock;
         const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
         this.callQueryCallbackFunction("orWhereExists", typeOfSubQuery, functionToCall, granularity);
@@ -1265,7 +1267,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     public whereNotExists() {
         const typeOfSubQuery = arguments[0];
-        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : getTableMetadata(arguments[0]).defaultLock;
         const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
         this.callQueryCallbackFunction("whereNotExists", typeOfSubQuery, functionToCall, granularity);
@@ -1274,7 +1276,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     }
     public orWhereNotExists() {
         const typeOfSubQuery = arguments[0];
-        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : getTableMetadata(arguments[0]).defaultLock;
         const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
         this.callQueryCallbackFunction("orWhereNotExists", typeOfSubQuery, functionToCall, granularity);
@@ -1318,7 +1320,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     public havingExists() {
         const typeOfSubQuery = arguments[0];
-        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : getTableMetadata(arguments[0]).defaultLock;
         const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
         this.callQueryCallbackFunction("havingExists", typeOfSubQuery, functionToCall, granularity);
@@ -1328,7 +1330,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     public havingNotExists() {
         const typeOfSubQuery = arguments[0];
-        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : getTableMetadata(arguments[0]).defaultLock;
         const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
         this.callQueryCallbackFunction("havingNotExists", typeOfSubQuery, functionToCall, granularity);
@@ -1360,7 +1362,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     public union() {
         const typeOfSubQuery = arguments[0];
-        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : getTableMetadata(arguments[0]).defaultLock;
         const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
         this.callQueryCallbackFunction("union", typeOfSubQuery, functionToCall, granularity);
@@ -1370,7 +1372,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     public unionAll() {
         const typeOfSubQuery = arguments[0];
-        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : getTableMetadata(arguments[0]).defaultLock;
         const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
         this.callQueryCallbackFunction("unionAll", typeOfSubQuery, functionToCall, granularity);
