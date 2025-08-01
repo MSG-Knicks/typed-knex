@@ -264,6 +264,9 @@ interface IJoinOnClause2<Model, JoinedModel> {
     andOnVal: IJoinOnVal<Model, JoinedModel>;
     orOnVal: IJoinOnVal<Model, JoinedModel>;
     onNull: IJoinOnNull<Model, JoinedModel>;
+    orOnNull: IJoinOnNull<Model, JoinedModel>;
+    onNotNull: IJoinOnNull<Model, JoinedModel>;
+    orOnNotNull: IJoinOnNull<Model, JoinedModel>;
 }
 
 interface IInsertSelect {
@@ -1713,7 +1716,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             knexOnObject = this;
         });
 
-        const onWithJoinedColumnOperatorColumn = (joinedColumn: any, operator: any, modelColumn: any, functionName: string) => {
+        const onWithJoinedColumnOperatorColumn = (joinedColumn: any, operator: any, modelColumn: any, functionName: keyof Knex.JoinClause) => {
             let column1Arguments;
 
             if (typeof modelColumn === "string") {
@@ -1726,9 +1729,16 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             knexOnObject[functionName](this.getColumnName(...column1Arguments), operator, column2Name);
         };
 
-        const onWithColumnOperatorValue = (joinedColumn: any, operator: any, value: any, functionName: string) => {
+        const onWithColumnOperatorValue = (joinedColumn: any, operator: any, value: any, functionName: keyof Knex.JoinClause) => {
             const column2Name = this.getColumnNameWithoutAlias(newPropertyKey, joinedColumn);
             knexOnObject[functionName](column2Name, operator, value);
+        };
+
+        const onNullValue = (modelColumn: any, functionName: keyof Knex.JoinClause) => {
+            const column2Arguments = this.getArgumentsFromColumnFunction(modelColumn);
+            const column2ArgumentsWithJoinedTable = [tableToJoinAlias, ...column2Arguments];
+
+            knexOnObject[functionName](column2ArgumentsWithJoinedTable.join("."));
         };
 
         const onObject = {
@@ -1760,11 +1770,20 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
                 onWithColumnOperatorValue(column1, operator, value, "orOnVal");
                 return onObject;
             },
-            onNull: (f: any) => {
-                const column2Arguments = this.getArgumentsFromColumnFunction(f);
-                const column2ArgumentsWithJoinedTable = [tableToJoinAlias, ...column2Arguments];
-
-                knexOnObject.onNull(column2ArgumentsWithJoinedTable.join("."));
+            onNull: (column: any) => {
+                onNullValue(column, "onNull");
+                return onObject;
+            },
+            onNotNull: (column: any) => {
+                onNullValue(column, "onNotNull");
+                return onObject;
+            },
+            orOnNull: (column: any) => {
+                onNullValue(column, "orOnNull");
+                return onObject;
+            },
+            orOnNotNull: (column: any) => {
+                onNullValue(column, "orOnNotNull");
                 return onObject;
             },
         } as any;
