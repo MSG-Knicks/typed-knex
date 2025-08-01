@@ -14,7 +14,8 @@ export class TypedKnex {
     constructor(private knex: Knex) {}
 
     public query<T>(tableClass: new () => T, granularity?: Granularity): ITypedQueryBuilder<T, T, T> {
-        return new TypedQueryBuilder<T, T, T>(tableClass, granularity, this.knex);
+        const queryGranularity = granularity ?? getTableMetadata(tableClass).defaultLock;
+        return new TypedQueryBuilder<T, T, T>(tableClass, queryGranularity, this.knex);
     }
 
     public with<T, U, V>(cteTableClass: new () => T, cteQuery: (queryBuilder: TypedKnexCTEQueryBuilder) => ITypedQueryBuilder<U, V, T>): TypedKnexQueryBuilder {
@@ -1624,7 +1625,9 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         const tableToJoinName = getTableName(secondColumnClass);
         const tableToJoinAlias = `${this.subQueryPrefix ?? ""}${secondColumnAlias}`;
         const tableToJoinJoinColumnName = `${tableToJoinAlias}.${getPrimaryKeyColumn(secondColumnClass).name}`;
-        const granularityQuery = !granularity ? "" : ` WITH (${granularity})`;
+        
+        const joinTableGranularity = granularity ?? getTableMetadata(secondColumnClass).defaultLock;
+        const granularityQuery = !joinTableGranularity ? "" : ` WITH (${joinTableGranularity})`;
 
         const tableNameRaw = this.knex.raw(`?? as ??${granularityQuery}`, [tableToJoinName, tableToJoinAlias]);
         if (joinType === "innerJoin") {
