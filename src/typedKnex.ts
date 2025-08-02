@@ -266,6 +266,10 @@ interface IJoinOnParentheses<Model, JoinedModel> {
     (onFunction: (join: IJoinOnClause2<Model, JoinedModel>) => void): IJoinOnClause2<Model, JoinedModel>;
 }
 
+interface IJoinOnRaw<Model, JoinedModel> {
+    (sql: string, ...bindings: string[]): IJoinOnClause2<Model, JoinedModel>;
+}
+
 interface IJoinOnClause2<Model, JoinedModel> {
     on: IJoinOn<Model, JoinedModel>;
     orOn: IJoinOn<Model, JoinedModel>;
@@ -288,6 +292,8 @@ interface IJoinOnClause2<Model, JoinedModel> {
     onParentheses: IJoinOnParentheses<Model, JoinedModel>;
     andOnParentheses: IJoinOnParentheses<Model, JoinedModel>;
     orOnParentheses: IJoinOnParentheses<Model, JoinedModel>;
+    onRaw: IJoinOnRaw<Model, JoinedModel>;
+    orOnRaw: IJoinOnRaw<Model, JoinedModel>;
 }
 
 interface IInsertSelect {
@@ -1887,6 +1893,14 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
                 onNullModelValue(modelColumn, "orOnNotNull");
                 return onObject;
             },
+            onRaw: (raw: string, ...bindings: string[]) => {
+                knexOnObject.on((on: Knex.JoinClause) => on.on(this.knex.raw(raw, bindings)));
+                return onObject;
+            },
+            orOnRaw: (raw: string, ...bindings: string[]) => {
+                knexOnObject.orOn((on: Knex.JoinClause) => on.on(this.knex.raw(raw, bindings)));
+                return onObject;
+            }
         } as any;
 
         return onObject;

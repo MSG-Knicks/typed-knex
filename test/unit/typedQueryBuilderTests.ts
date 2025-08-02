@@ -1337,6 +1337,18 @@ describe("TypedKnexQueryBuilder", () => {
         done();
     });
 
+    it("should join on tables with raw statements if there are no other ways to join correctly", (done) => {
+        const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
+        const query = typedKnex.query(User).innerJoinTableOnFunction("test", UserSetting, (join) => {
+            join.onRaw("?? = ??", "userSettings.userId", "users.id").orOnRaw("?? is null or ?? = ?", "category.id", "users.name", "John Doe")
+        })
+        
+        const queryString = query.toQuery();
+        assert.equal(queryString, 'select * from "users" inner join "userSettings" as "test" on ("userSettings"."userId" = "users"."id") or ("category"."id" is null or "users"."name" = \'John Doe\')');
+
+        done();
+    });
+
     it("should get name of the table", (done) => {
         const tableName = getTableName(User);
 
