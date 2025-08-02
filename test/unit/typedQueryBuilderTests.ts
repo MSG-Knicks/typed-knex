@@ -1308,6 +1308,22 @@ describe("TypedKnexQueryBuilder", () => {
         done();
     });
 
+    it("should join on tables with parentheses", (done) => {
+        const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
+        const query = typedKnex.query(User).leftOuterJoinTableOnFunction("category", UserCategory, (join) => {
+            join.on("id", "=", "categoryId").andOnParentheses((andOn) => {
+                andOn.onVal("year", "=", 2025).orOnNull("year").orOnParentheses((orOn) => {
+                    orOn.onVal("year", "=", 2026).andOn("phoneNumber", "=", "numericValue");
+                });
+            }).orOnVal("year", "=", 2027)
+        });
+
+        const queryString = query.toQuery();
+        assert.equal(queryString, 'select * from "users" left outer join "userCategories" as "category" on "users"."categoryId" = "category"."id" and ("category"."year" = 2025 or "category"."year" is null or ("category"."year" = 2026 and "users"."numericValue" = "category"."phoneNumber")) or "category"."year" = 2027');
+
+        done();
+    });
+
     it("should get name of the table", (done) => {
         const tableName = getTableName(User);
 

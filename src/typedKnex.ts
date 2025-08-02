@@ -256,6 +256,10 @@ interface IJoinOnNull<Model, JoinedModel> {
     <ConcatKey extends NestedKeysOf<NonNullableRecursive<JoinedModel>, keyof NonNullableRecursive<JoinedModel>, "">>(key: ConcatKey): IJoinOnClause2<Model, JoinedModel>;
 }
 
+interface IJoinOnParentheses<Model, JoinedModel> {
+    (onFunction: (join: IJoinOnClause2<Model, JoinedModel>) => void): IJoinOnClause2<Model, JoinedModel>;
+}
+
 interface IJoinOnClause2<Model, JoinedModel> {
     on: IJoinOn<Model, JoinedModel>;
     orOn: IJoinOn<Model, JoinedModel>;
@@ -267,6 +271,11 @@ interface IJoinOnClause2<Model, JoinedModel> {
     orOnNull: IJoinOnNull<Model, JoinedModel>;
     onNotNull: IJoinOnNull<Model, JoinedModel>;
     orOnNotNull: IJoinOnNull<Model, JoinedModel>;
+    andOnNotNull: IJoinOnNull<Model, JoinedModel>;
+    andOnNull: IJoinOnNull<Model, JoinedModel>;
+    onParentheses: IJoinOnParentheses<Model, JoinedModel>;
+    andOnParentheses: IJoinOnParentheses<Model, JoinedModel>;
+    orOnParentheses: IJoinOnParentheses<Model, JoinedModel>;
 }
 
 interface IInsertSelect {
@@ -1716,6 +1725,13 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             knexOnObject = this;
         });
 
+        const onObject = this.getTypedKnexOnObject(newPropertyKey, tableToJoinAlias, knexOnObject);
+        onFunction(onObject as any);
+
+        return this as any;
+    }
+
+    private getTypedKnexOnObject(newPropertyKey: any, tableToJoinAlias: any, knexOnObject: any) {
         const onWithJoinedColumnOperatorColumn = (joinedColumn: any, operator: any, modelColumn: any, functionName: keyof Knex.JoinClause) => {
             let column1Arguments;
 
@@ -1786,11 +1802,38 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
                 onNullValue(column, "orOnNotNull");
                 return onObject;
             },
+            andOnNull: (column: any) => {
+                onNullValue(column, "andOnNull");
+                return onObject;
+            },
+            andOnNotNull: (column: any) => {
+                onNullValue(column, "andOnNotNull");
+                return onObject;
+            },
+            onParentheses: (onParenthesesFunction: (join: IJoinOnClause2<any, any>) => void) => {
+                knexOnObject.on((on: Knex.JoinClause) => {
+                    const parenthesesOnObject = this.getTypedKnexOnObject(newPropertyKey, tableToJoinAlias, on);
+                    onParenthesesFunction(parenthesesOnObject);
+                });
+                return onObject
+            },
+            andOnParentheses: (onParenthesesFunction: (join: IJoinOnClause2<any, any>) => void) => {
+                knexOnObject.andOn((on: Knex.JoinClause) => {
+                    const parenthesesOnObject = this.getTypedKnexOnObject(newPropertyKey, tableToJoinAlias, on);
+                    onParenthesesFunction(parenthesesOnObject);
+                });
+                return onObject;
+            },
+            orOnParentheses: (onParenthesesFunction: (join: IJoinOnClause2<any, any>) => void) => {
+                knexOnObject.orOn((on: Knex.JoinClause) => {
+                    const parenthesesOnObject = this.getTypedKnexOnObject(newPropertyKey, tableToJoinAlias, on);
+                    onParenthesesFunction(parenthesesOnObject);
+                });
+                return onObject;
+            },
         } as any;
 
-        onFunction(onObject as any);
-
-        return this as any;
+        return onObject;
     }
 
     private callKnexFunctionWithColumnFunction(knexFunction: any, ...args: any[]) {
