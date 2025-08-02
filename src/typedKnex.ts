@@ -1,6 +1,6 @@
 /* eslint-disable prefer-rest-params, no-unused-vars */
 import { Knex } from "knex";
-import { getColumnInformation, getColumnProperties, getPrimaryKeyColumn, getTableName } from "./decorators";
+import { getColumnInformation, getColumnProperties, getPrimaryKeyColumn, getTableMetadata, getTableName } from "./decorators";
 import { NestedForeignKeyKeysOf, NestedKeysOf } from "./NestedKeysOf";
 import { NestedRecord } from "./NestedRecord";
 import { NonForeignKeyObjects } from "./NonForeignKeyObjects";
@@ -14,7 +14,8 @@ export class TypedKnex {
     constructor(private knex: Knex) {}
 
     public query<T>(tableClass: new () => T, granularity?: Granularity): ITypedQueryBuilder<T, T, T> {
-        return new TypedQueryBuilder<T, T, T>(tableClass, granularity, this.knex);
+        const queryGranularity = granularity ?? getTableMetadata(tableClass).defaultLock;
+        return new TypedQueryBuilder<T, T, T>(tableClass, queryGranularity, this.knex);
     }
 
     public with<T, U, V>(cteTableClass: new () => T, cteQuery: (queryBuilder: TypedKnexCTEQueryBuilder) => ITypedQueryBuilder<U, V, T>): TypedKnexQueryBuilder {
@@ -250,9 +251,23 @@ interface IJoinOn<Model, JoinedModel> {
 interface IJoinOnVal<Model, JoinedModel> {
     <ConcatKey extends NestedKeysOf<NonNullableRecursive<JoinedModel>, keyof NonNullableRecursive<JoinedModel>, "">>(key: ConcatKey, operator: Operator, value: any): IJoinOnClause2<Model, JoinedModel>;
 }
+interface IJoinOnModelVal<Model, JoinedModel> {
+    <ConcatKey extends NestedKeysOf<NonNullableRecursive<Model>, keyof NonNullableRecursive<Model>, "">>(key: ConcatKey, operator: Operator, value: any): IJoinOnClause2<Model, JoinedModel>;
+}
 
 interface IJoinOnNull<Model, JoinedModel> {
     <ConcatKey extends NestedKeysOf<NonNullableRecursive<JoinedModel>, keyof NonNullableRecursive<JoinedModel>, "">>(key: ConcatKey): IJoinOnClause2<Model, JoinedModel>;
+}
+interface IJoinOnModelNull<Model, JoinedModel> {
+    <ConcatKey extends NestedKeysOf<NonNullableRecursive<Model>, keyof NonNullableRecursive<Model>, "">>(key: ConcatKey): IJoinOnClause2<Model, JoinedModel>;
+}
+
+interface IJoinOnParentheses<Model, JoinedModel> {
+    (onFunction: (join: IJoinOnClause2<Model, JoinedModel>) => void): IJoinOnClause2<Model, JoinedModel>;
+}
+
+interface IJoinOnRaw<Model, JoinedModel> {
+    (sql: string, ...bindings: string[]): IJoinOnClause2<Model, JoinedModel>;
 }
 
 interface IJoinOnClause2<Model, JoinedModel> {
@@ -261,8 +276,24 @@ interface IJoinOnClause2<Model, JoinedModel> {
     andOn: IJoinOn<Model, JoinedModel>;
     onVal: IJoinOnVal<Model, JoinedModel>;
     andOnVal: IJoinOnVal<Model, JoinedModel>;
+    onQueryVal: IJoinOnModelVal<Model, JoinedModel>;
     orOnVal: IJoinOnVal<Model, JoinedModel>;
+    orOnQueryVal: IJoinOnModelVal<Model, JoinedModel>;
     onNull: IJoinOnNull<Model, JoinedModel>;
+    onQueryNull: IJoinOnModelNull<Model, JoinedModel>;
+    orOnNull: IJoinOnNull<Model, JoinedModel>;
+    orOnQueryNull: IJoinOnModelNull<Model, JoinedModel>;
+    onNotNull: IJoinOnNull<Model, JoinedModel>;
+    onQueryNotNull: IJoinOnModelNull<Model, JoinedModel>;
+    orOnNotNull: IJoinOnNull<Model, JoinedModel>;
+    orOnQueryNotNull: IJoinOnModelNull<Model, JoinedModel>;
+    andOnNotNull: IJoinOnNull<Model, JoinedModel>;
+    andOnNull: IJoinOnNull<Model, JoinedModel>;
+    onParentheses: IJoinOnParentheses<Model, JoinedModel>;
+    andOnParentheses: IJoinOnParentheses<Model, JoinedModel>;
+    orOnParentheses: IJoinOnParentheses<Model, JoinedModel>;
+    onRaw: IJoinOnRaw<Model, JoinedModel>;
+    orOnRaw: IJoinOnRaw<Model, JoinedModel>;
 }
 
 interface IInsertSelect {
@@ -441,7 +472,7 @@ interface IUnion<Model, SelectableModel, Row> {
     <SubQueryModel>(subQueryModel: new () => SubQueryModel, granularity: Granularity, code: (subQuery: ITypedQueryBuilder<SubQueryModel, SubQueryModel, {}>) => void): ITypedQueryBuilder<Model, SelectableModel, Row>;
 }
 
-type Granularity = "PAGLOCK" | "NOLOCK" | "READCOMMITTEDLOCK" | "ROWLOCK" | "TABLOCK" | "TABLOCKX";
+export type Granularity = "PAGLOCK" | "NOLOCK" | "READCOMMITTEDLOCK" | "ROWLOCK" | "TABLOCK" | "TABLOCKX";
 
 function getProxyAndMemories<ModelType, Row>(typedQueryBuilder?: TypedQueryBuilder<ModelType, Row>) {
     const memories = [] as string[];
@@ -934,6 +965,8 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     }
 
     public async getMany(flattenOption?: FlattenOption): Promise<(Row extends ModelType ? RemoveObjectsFrom<ModelType> : Row)[]> {
+        // attach any default locks to the query if they are not specified
+
         if (this.hasSelectClause === false) {
             this.selectAllModelProperties();
         }
@@ -995,7 +1028,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     public innerJoin() {
         const callIncludesGranularity = this.granularitySet.has(arguments[2]);
-        const granularity = callIncludesGranularity ? (arguments[2] as Granularity) : undefined;
+        const granularity = callIncludesGranularity ? (arguments[2] as Granularity) : getTableMetadata(arguments[1]).defaultLock;
         const joinTableColumnString = callIncludesGranularity ? arguments[3] : arguments[2];
         const operator = callIncludesGranularity ? arguments[4] : arguments[3];
         const existingTableColumnString = callIncludesGranularity ? arguments[5] : arguments[4];
@@ -1004,7 +1037,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     }
     public leftOuterJoin() {
         const callIncludesGranularity = this.granularitySet.has(arguments[2]);
-        const granularity = callIncludesGranularity ? (arguments[2] as Granularity) : undefined;
+        const granularity = callIncludesGranularity ? (arguments[2] as Granularity) : getTableMetadata(arguments[1]).defaultLock;
         const joinTableColumnString = callIncludesGranularity ? arguments[3] : arguments[2];
         const operator = callIncludesGranularity ? arguments[4] : arguments[3];
         const existingTableColumnString = callIncludesGranularity ? arguments[5] : arguments[4];
@@ -1013,14 +1046,14 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     }
 
     public innerJoinTableOnFunction() {
-        const granularity = typeof arguments[2] === "string" ? (arguments[2] as Granularity) : undefined;
+        const granularity = typeof arguments[2] === "string" ? (arguments[2] as Granularity) : getTableMetadata(arguments[1]).defaultLock;
         const on = typeof arguments[2] === "string" ? arguments[3] : arguments[2];
 
         return this.joinTableOnFunction(this.queryBuilder.innerJoin.bind(this.queryBuilder), arguments[0], arguments[1], granularity, on);
     }
 
     public leftOuterJoinTableOnFunction() {
-        const granularity = typeof arguments[2] === "string" ? (arguments[2] as Granularity) : undefined;
+        const granularity = typeof arguments[2] === "string" ? (arguments[2] as Granularity) : getTableMetadata(arguments[1]).defaultLock;
         const on = typeof arguments[2] === "string" ? arguments[3] : arguments[2];
 
         return this.joinTableOnFunction(this.queryBuilder.leftOuterJoin.bind(this.queryBuilder), arguments[0], arguments[1], granularity, on);
@@ -1221,7 +1254,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         const name = arguments[0];
         const typeOfSubQuery = arguments[2];
         const functionToCall = arguments[3];
-        const granularity = arguments[4];
+        const granularity = arguments[4] ?? getTableMetadata(typeOfSubQuery).defaultLock;
 
         const { root, memories } = getProxyAndMemories(this as any);
 
@@ -1246,7 +1279,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     public whereExists() {
         const typeOfSubQuery = arguments[0];
-        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : getTableMetadata(arguments[0]).defaultLock;
         const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
         this.callQueryCallbackFunction("whereExists", typeOfSubQuery, functionToCall, granularity);
@@ -1255,7 +1288,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     }
     public orWhereExists() {
         const typeOfSubQuery = arguments[0];
-        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : getTableMetadata(arguments[0]).defaultLock;
         const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
         this.callQueryCallbackFunction("orWhereExists", typeOfSubQuery, functionToCall, granularity);
@@ -1265,7 +1298,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     public whereNotExists() {
         const typeOfSubQuery = arguments[0];
-        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : getTableMetadata(arguments[0]).defaultLock;
         const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
         this.callQueryCallbackFunction("whereNotExists", typeOfSubQuery, functionToCall, granularity);
@@ -1274,7 +1307,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     }
     public orWhereNotExists() {
         const typeOfSubQuery = arguments[0];
-        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : getTableMetadata(arguments[0]).defaultLock;
         const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
         this.callQueryCallbackFunction("orWhereNotExists", typeOfSubQuery, functionToCall, granularity);
@@ -1318,7 +1351,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     public havingExists() {
         const typeOfSubQuery = arguments[0];
-        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : getTableMetadata(arguments[0]).defaultLock;
         const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
         this.callQueryCallbackFunction("havingExists", typeOfSubQuery, functionToCall, granularity);
@@ -1328,7 +1361,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     public havingNotExists() {
         const typeOfSubQuery = arguments[0];
-        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : getTableMetadata(arguments[0]).defaultLock;
         const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
         this.callQueryCallbackFunction("havingNotExists", typeOfSubQuery, functionToCall, granularity);
@@ -1360,7 +1393,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     public union() {
         const typeOfSubQuery = arguments[0];
-        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : getTableMetadata(arguments[0]).defaultLock;
         const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
         this.callQueryCallbackFunction("union", typeOfSubQuery, functionToCall, granularity);
@@ -1370,7 +1403,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     public unionAll() {
         const typeOfSubQuery = arguments[0];
-        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : undefined;
+        const granularity = typeof arguments[1] === "string" ? (arguments[1] as Granularity) : getTableMetadata(arguments[0]).defaultLock;
         const functionToCall = typeof arguments[1] === "string" ? arguments[2] : arguments[1];
 
         this.callQueryCallbackFunction("unionAll", typeOfSubQuery, functionToCall, granularity);
@@ -1622,7 +1655,9 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         const tableToJoinName = getTableName(secondColumnClass);
         const tableToJoinAlias = `${this.subQueryPrefix ?? ""}${secondColumnAlias}`;
         const tableToJoinJoinColumnName = `${tableToJoinAlias}.${getPrimaryKeyColumn(secondColumnClass).name}`;
-        const granularityQuery = !granularity ? "" : ` WITH (${granularity})`;
+
+        const joinTableGranularity = granularity ?? getTableMetadata(secondColumnClass).defaultLock;
+        const granularityQuery = !joinTableGranularity ? "" : ` WITH (${joinTableGranularity})`;
 
         const tableNameRaw = this.knex.raw(`?? as ??${granularityQuery}`, [tableToJoinName, tableToJoinAlias]);
         if (joinType === "innerJoin") {
@@ -1708,7 +1743,14 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             knexOnObject = this;
         });
 
-        const onWithJoinedColumnOperatorColumn = (joinedColumn: any, operator: any, modelColumn: any, functionName: string) => {
+        const onObject = this.getTypedKnexOnObject(newPropertyKey, tableToJoinAlias, knexOnObject);
+        onFunction(onObject as any);
+
+        return this as any;
+    }
+
+    private getTypedKnexOnObject(newPropertyKey: any, tableToJoinAlias: any, knexOnObject: any) {
+        const onWithJoinedColumnOperatorColumn = (joinedColumn: any, operator: any, modelColumn: any, functionName: keyof Knex.JoinClause) => {
             let column1Arguments;
 
             if (typeof modelColumn === "string") {
@@ -1721,9 +1763,36 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             knexOnObject[functionName](this.getColumnName(...column1Arguments), operator, column2Name);
         };
 
-        const onWithColumnOperatorValue = (joinedColumn: any, operator: any, value: any, functionName: string) => {
-            const column2Name = this.getColumnNameWithoutAlias(newPropertyKey, joinedColumn);
+        const onWithColumnOperatorValue = (joinedModelColumn: any, operator: any, value: any, functionName: keyof Knex.JoinClause) => {
+            const column2Name = this.getColumnNameWithoutAlias(newPropertyKey, joinedModelColumn);
             knexOnObject[functionName](column2Name, operator, value);
+        };
+        const onWithModelColumnOperatorValue = (modelColumn: any, operator: any, value: any, functionName: keyof Knex.JoinClause) => {
+            let columnArguments;
+            if (typeof modelColumn === "string") {
+                columnArguments = modelColumn.split(".");
+            } else {
+                columnArguments = this.getArgumentsFromColumnFunction(modelColumn);
+            }
+
+            knexOnObject[functionName](this.getColumnName(...columnArguments), operator, value);
+        };
+
+        const onNullValue = (joinedModelColumn: any, functionName: keyof Knex.JoinClause) => {
+            const columnArguments = this.getArgumentsFromColumnFunction(joinedModelColumn);
+            const columnArgumentsWithJoinedTable = [tableToJoinAlias, ...columnArguments];
+
+            knexOnObject[functionName](columnArgumentsWithJoinedTable.join("."));
+        };
+        const onNullModelValue = (modelColumn: any, functionName: keyof Knex.JoinClause) => {
+            let columnArguments;
+            if (typeof modelColumn === "string") {
+                columnArguments = modelColumn.split(".");
+            } else {
+                columnArguments = this.getArgumentsFromColumnFunction(modelColumn);
+            }
+
+            knexOnObject[functionName](this.getColumnName(...columnArguments));
         };
 
         const onObject = {
@@ -1755,18 +1824,86 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
                 onWithColumnOperatorValue(column1, operator, value, "orOnVal");
                 return onObject;
             },
-            onNull: (f: any) => {
-                const column2Arguments = this.getArgumentsFromColumnFunction(f);
-                const column2ArgumentsWithJoinedTable = [tableToJoinAlias, ...column2Arguments];
-
-                knexOnObject.onNull(column2ArgumentsWithJoinedTable.join("."));
+            onNull: (column: any) => {
+                onNullValue(column, "onNull");
+                return onObject;
+            },
+            onNotNull: (column: any) => {
+                onNullValue(column, "onNotNull");
+                return onObject;
+            },
+            orOnNull: (column: any) => {
+                onNullValue(column, "orOnNull");
+                return onObject;
+            },
+            orOnNotNull: (column: any) => {
+                onNullValue(column, "orOnNotNull");
+                return onObject;
+            },
+            andOnNull: (column: any) => {
+                onNullValue(column, "andOnNull");
+                return onObject;
+            },
+            andOnNotNull: (column: any) => {
+                onNullValue(column, "andOnNotNull");
+                return onObject;
+            },
+            onParentheses: (onParenthesesFunction: (join: IJoinOnClause2<any, any>) => void) => {
+                knexOnObject.on((on: Knex.JoinClause) => {
+                    const parenthesesOnObject = this.getTypedKnexOnObject(newPropertyKey, tableToJoinAlias, on);
+                    onParenthesesFunction(parenthesesOnObject);
+                });
+                return onObject;
+            },
+            andOnParentheses: (onParenthesesFunction: (join: IJoinOnClause2<any, any>) => void) => {
+                knexOnObject.andOn((on: Knex.JoinClause) => {
+                    const parenthesesOnObject = this.getTypedKnexOnObject(newPropertyKey, tableToJoinAlias, on);
+                    onParenthesesFunction(parenthesesOnObject);
+                });
+                return onObject;
+            },
+            orOnParentheses: (onParenthesesFunction: (join: IJoinOnClause2<any, any>) => void) => {
+                knexOnObject.orOn((on: Knex.JoinClause) => {
+                    const parenthesesOnObject = this.getTypedKnexOnObject(newPropertyKey, tableToJoinAlias, on);
+                    onParenthesesFunction(parenthesesOnObject);
+                });
+                return onObject;
+            },
+            onQueryVal: (modelColumn: any, operator: any, value: any) => {
+                onWithModelColumnOperatorValue(modelColumn, operator, value, "onVal");
+                return onObject;
+            },
+            orOnQueryVal: (modelColumn: any, operator: any, value: any) => {
+                onWithModelColumnOperatorValue(modelColumn, operator, value, "orOnVal");
+                return onObject;
+            },
+            onQueryNull: (modelColumn: any) => {
+                onNullModelValue(modelColumn, "onNull");
+                return onObject;
+            },
+            orOnQueryNull: (modelColumn: any) => {
+                onNullModelValue(modelColumn, "orOnNull");
+                return onObject;
+            },
+            onQueryNotNull: (modelColumn: any) => {
+                onNullModelValue(modelColumn, "onNotNull");
+                return onObject;
+            },
+            orOnQueryNotNull: (modelColumn: any) => {
+                onNullModelValue(modelColumn, "orOnNotNull");
+                return onObject;
+            },
+            onRaw: (raw: string, ...bindings: string[]) => {
+                knexOnObject.on((on: Knex.JoinClause) => on.on(this.knex.raw(raw, bindings)));
+                return onObject;
+            },
+            orOnRaw: (raw: string, ...bindings: string[]) => {
+                knexOnObject.orOn((on: Knex.JoinClause) => on.on(this.knex.raw(raw, bindings)));
                 return onObject;
             },
         } as any;
 
-        onFunction(onObject as any);
-
-        return this as any;
+        return onObject;
     }
 
     private callKnexFunctionWithColumnFunction(knexFunction: any, ...args: any[]) {

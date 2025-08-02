@@ -71,6 +71,15 @@ export class User {
     public extraData!: IExtraData;
 }
 
+@Table("nolockTable", "NOLOCK")
+export class NoLockTable {
+    @Column({ primary: true })
+    public id!: string;
+
+    @Column()
+    public name: string;
+}
+
 @Table("userSettings")
 export class UserSetting {
     @Column({ primary: true })
@@ -91,6 +100,8 @@ export class UserSetting {
     public initialValue!: string;
     @Column({ name: "other_value" })
     public otherValue!: string;
+    @Column({ name: "no_lock" })
+    public noLockColumn: NoLockTable;
 }
 
 @Table()
