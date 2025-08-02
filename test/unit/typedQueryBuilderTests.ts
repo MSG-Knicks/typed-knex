@@ -118,7 +118,7 @@ describe("TypedKnexQueryBuilder", () => {
     });
     it("should override the default granularity of a table", (done) => {
         const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
-        const query = typedKnex.query(NoLockTable, 'TABLOCK').select("id", "name");
+        const query = typedKnex.query(NoLockTable, "TABLOCK").select("id", "name");
 
         const queryString = query.toQuery();
         assert.equal(queryString, 'select "nolockTable"."id" as "id", "nolockTable"."name" as "name" from "nolockTable" WITH (TABLOCK)');
@@ -741,7 +741,7 @@ describe("TypedKnexQueryBuilder", () => {
             .union(NoLockTable, (subQuery) => {
                 subQuery.select("id").where("name", "user1");
             });
-            
+
         const queryString = query.toQuery();
         assert.equal(queryString, 'select "users"."id" as "id" from "users" union select "nolockTable"."id" as "id" from "nolockTable" WITH (NOLOCK) where "nolockTable"."name" = \'user1\'');
 
@@ -1311,15 +1311,23 @@ describe("TypedKnexQueryBuilder", () => {
     it("should join on tables with parentheses", (done) => {
         const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
         const query = typedKnex.query(User).leftOuterJoinTableOnFunction("category", UserCategory, (join) => {
-            join.on("id", "=", "categoryId").andOnParentheses((andOn) => {
-                andOn.onVal("year", "=", 2025).orOnNull("year").orOnParentheses((orOn) => {
-                    orOn.onVal("year", "=", 2026).andOn("phoneNumber", "=", "numericValue");
-                });
-            }).orOnVal("year", "=", 2027)
+            join.on("id", "=", "categoryId")
+                .andOnParentheses((andOn) => {
+                    andOn
+                        .onVal("year", "=", 2025)
+                        .orOnNull("year")
+                        .orOnParentheses((orOn) => {
+                            orOn.onVal("year", "=", 2026).andOn("phoneNumber", "=", "numericValue");
+                        });
+                })
+                .orOnVal("year", "=", 2027);
         });
 
         const queryString = query.toQuery();
-        assert.equal(queryString, 'select * from "users" left outer join "userCategories" as "category" on "users"."categoryId" = "category"."id" and ("category"."year" = 2025 or "category"."year" is null or ("category"."year" = 2026 and "users"."numericValue" = "category"."phoneNumber")) or "category"."year" = 2027');
+        assert.equal(
+            queryString,
+            'select * from "users" left outer join "userCategories" as "category" on "users"."categoryId" = "category"."id" and ("category"."year" = 2025 or "category"."year" is null or ("category"."year" = 2026 and "users"."numericValue" = "category"."phoneNumber")) or "category"."year" = 2027'
+        );
 
         done();
     });
@@ -1327,12 +1335,18 @@ describe("TypedKnexQueryBuilder", () => {
     it("should join on tables with values from the model columns", (done) => {
         const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
 
-        const query = typedKnex.query(User).innerJoinColumn("category").innerJoinTableOnFunction("test", UserSetting, (join) => {
-            join.onQueryNull("category.id").orOnQueryVal("name", "=", "John Doe")
-        })
+        const query = typedKnex
+            .query(User)
+            .innerJoinColumn("category")
+            .innerJoinTableOnFunction("test", UserSetting, (join) => {
+                join.onQueryNull("category.id").orOnQueryVal("name", "=", "John Doe");
+            });
 
         const queryString = query.toQuery();
-        assert.equal(queryString, 'select * from "users" inner join "userCategories" as "category" on "category"."id" = "users"."categoryId" inner join "userSettings" as "test" on "category"."id" is null or "users"."name" = \'John Doe\'');
+        assert.equal(
+            queryString,
+            'select * from "users" inner join "userCategories" as "category" on "category"."id" = "users"."categoryId" inner join "userSettings" as "test" on "category"."id" is null or "users"."name" = \'John Doe\''
+        );
 
         done();
     });
@@ -1340,9 +1354,9 @@ describe("TypedKnexQueryBuilder", () => {
     it("should join on tables with raw statements if there are no other ways to join correctly", (done) => {
         const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
         const query = typedKnex.query(User).innerJoinTableOnFunction("test", UserSetting, (join) => {
-            join.onRaw("?? = ??", "userSettings.userId", "users.id").orOnRaw("?? is null or ?? = ?", "category.id", "users.name", "John Doe")
-        })
-        
+            join.onRaw("?? = ??", "userSettings.userId", "users.id").orOnRaw("?? is null or ?? = ?", "category.id", "users.name", "John Doe");
+        });
+
         const queryString = query.toQuery();
         assert.equal(queryString, 'select * from "users" inner join "userSettings" as "test" on ("userSettings"."userId" = "users"."id") or ("category"."id" is null or "users"."name" = \'John Doe\')');
 

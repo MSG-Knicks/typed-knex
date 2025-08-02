@@ -1655,7 +1655,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         const tableToJoinName = getTableName(secondColumnClass);
         const tableToJoinAlias = `${this.subQueryPrefix ?? ""}${secondColumnAlias}`;
         const tableToJoinJoinColumnName = `${tableToJoinAlias}.${getPrimaryKeyColumn(secondColumnClass).name}`;
-        
+
         const joinTableGranularity = granularity ?? getTableMetadata(secondColumnClass).defaultLock;
         const granularityQuery = !joinTableGranularity ? "" : ` WITH (${joinTableGranularity})`;
 
@@ -1853,7 +1853,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
                     const parenthesesOnObject = this.getTypedKnexOnObject(newPropertyKey, tableToJoinAlias, on);
                     onParenthesesFunction(parenthesesOnObject);
                 });
-                return onObject
+                return onObject;
             },
             andOnParentheses: (onParenthesesFunction: (join: IJoinOnClause2<any, any>) => void) => {
                 knexOnObject.andOn((on: Knex.JoinClause) => {
@@ -1900,7 +1900,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             orOnRaw: (raw: string, ...bindings: string[]) => {
                 knexOnObject.orOn((on: Knex.JoinClause) => on.on(this.knex.raw(raw, bindings)));
                 return onObject;
-            }
+            },
         } as any;
 
         return onObject;
