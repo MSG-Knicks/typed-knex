@@ -1324,6 +1324,19 @@ describe("TypedKnexQueryBuilder", () => {
         done();
     });
 
+    it("should join on tables with values from the model columns", (done) => {
+        const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
+
+        const query = typedKnex.query(User).innerJoinColumn("category").innerJoinTableOnFunction("test", UserSetting, (join) => {
+            join.onQueryNull("category.id").orOnQueryVal("name", "=", "John Doe")
+        })
+
+        const queryString = query.toQuery();
+        assert.equal(queryString, 'select * from "users" inner join "userCategories" as "category" on "category"."id" = "users"."categoryId" inner join "userSettings" as "test" on "category"."id" is null or "users"."name" = \'John Doe\'');
+
+        done();
+    });
+
     it("should get name of the table", (done) => {
         const tableName = getTableName(User);
 

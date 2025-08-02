@@ -251,9 +251,15 @@ interface IJoinOn<Model, JoinedModel> {
 interface IJoinOnVal<Model, JoinedModel> {
     <ConcatKey extends NestedKeysOf<NonNullableRecursive<JoinedModel>, keyof NonNullableRecursive<JoinedModel>, "">>(key: ConcatKey, operator: Operator, value: any): IJoinOnClause2<Model, JoinedModel>;
 }
+interface IJoinOnModelVal<Model, JoinedModel> {
+    <ConcatKey extends NestedKeysOf<NonNullableRecursive<Model>, keyof NonNullableRecursive<Model>, "">>(key: ConcatKey, operator: Operator, value: any): IJoinOnClause2<Model, JoinedModel>;
+}
 
 interface IJoinOnNull<Model, JoinedModel> {
     <ConcatKey extends NestedKeysOf<NonNullableRecursive<JoinedModel>, keyof NonNullableRecursive<JoinedModel>, "">>(key: ConcatKey): IJoinOnClause2<Model, JoinedModel>;
+}
+interface IJoinOnModelNull<Model, JoinedModel> {
+    <ConcatKey extends NestedKeysOf<NonNullableRecursive<Model>, keyof NonNullableRecursive<Model>, "">>(key: ConcatKey): IJoinOnClause2<Model, JoinedModel>;
 }
 
 interface IJoinOnParentheses<Model, JoinedModel> {
@@ -266,11 +272,17 @@ interface IJoinOnClause2<Model, JoinedModel> {
     andOn: IJoinOn<Model, JoinedModel>;
     onVal: IJoinOnVal<Model, JoinedModel>;
     andOnVal: IJoinOnVal<Model, JoinedModel>;
+    onQueryVal: IJoinOnModelVal<Model, JoinedModel>;
     orOnVal: IJoinOnVal<Model, JoinedModel>;
+    orOnQueryVal: IJoinOnModelVal<Model, JoinedModel>;
     onNull: IJoinOnNull<Model, JoinedModel>;
+    onQueryNull: IJoinOnModelNull<Model, JoinedModel>;
     orOnNull: IJoinOnNull<Model, JoinedModel>;
+    orOnQueryNull: IJoinOnModelNull<Model, JoinedModel>;
     onNotNull: IJoinOnNull<Model, JoinedModel>;
+    onQueryNotNull: IJoinOnModelNull<Model, JoinedModel>;
     orOnNotNull: IJoinOnNull<Model, JoinedModel>;
+    orOnQueryNotNull: IJoinOnModelNull<Model, JoinedModel>;
     andOnNotNull: IJoinOnNull<Model, JoinedModel>;
     andOnNull: IJoinOnNull<Model, JoinedModel>;
     onParentheses: IJoinOnParentheses<Model, JoinedModel>;
@@ -1745,16 +1757,36 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             knexOnObject[functionName](this.getColumnName(...column1Arguments), operator, column2Name);
         };
 
-        const onWithColumnOperatorValue = (joinedColumn: any, operator: any, value: any, functionName: keyof Knex.JoinClause) => {
-            const column2Name = this.getColumnNameWithoutAlias(newPropertyKey, joinedColumn);
+        const onWithColumnOperatorValue = (joinedModelColumn: any, operator: any, value: any, functionName: keyof Knex.JoinClause) => {
+            const column2Name = this.getColumnNameWithoutAlias(newPropertyKey, joinedModelColumn);
             knexOnObject[functionName](column2Name, operator, value);
         };
+        const onWithModelColumnOperatorValue = (modelColumn: any, operator: any, value: any, functionName: keyof Knex.JoinClause) => {
+            let columnArguments;
+            if (typeof modelColumn === "string") {
+                columnArguments = modelColumn.split(".");
+            } else {
+                columnArguments = this.getArgumentsFromColumnFunction(modelColumn);
+            }
 
-        const onNullValue = (modelColumn: any, functionName: keyof Knex.JoinClause) => {
-            const column2Arguments = this.getArgumentsFromColumnFunction(modelColumn);
-            const column2ArgumentsWithJoinedTable = [tableToJoinAlias, ...column2Arguments];
+            knexOnObject[functionName](this.getColumnName(...columnArguments), operator, value);
+        };
 
-            knexOnObject[functionName](column2ArgumentsWithJoinedTable.join("."));
+        const onNullValue = (joinedModelColumn: any, functionName: keyof Knex.JoinClause) => {
+            const columnArguments = this.getArgumentsFromColumnFunction(joinedModelColumn);
+            const columnArgumentsWithJoinedTable = [tableToJoinAlias, ...columnArguments];
+
+            knexOnObject[functionName](columnArgumentsWithJoinedTable.join("."));
+        };
+        const onNullModelValue = (modelColumn: any, functionName: keyof Knex.JoinClause) => {
+            let columnArguments;
+            if (typeof modelColumn === "string") {
+                columnArguments = modelColumn.split(".");
+            } else {
+                columnArguments = this.getArgumentsFromColumnFunction(modelColumn);
+            }
+
+            knexOnObject[functionName](this.getColumnName(...columnArguments));
         };
 
         const onObject = {
@@ -1829,6 +1861,30 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
                     const parenthesesOnObject = this.getTypedKnexOnObject(newPropertyKey, tableToJoinAlias, on);
                     onParenthesesFunction(parenthesesOnObject);
                 });
+                return onObject;
+            },
+            onQueryVal: (modelColumn: any, operator: any, value: any) => {
+                onWithModelColumnOperatorValue(modelColumn, operator, value, "onVal");
+                return onObject;
+            },
+            orOnQueryVal: (modelColumn: any, operator: any, value: any) => {
+                onWithModelColumnOperatorValue(modelColumn, operator, value, "orOnVal");
+                return onObject;
+            },
+            onQueryNull: (modelColumn: any) => {
+                onNullModelValue(modelColumn, "onNull");
+                return onObject;
+            },
+            orOnQueryNull: (modelColumn: any) => {
+                onNullModelValue(modelColumn, "orOnNull");
+                return onObject;
+            },
+            onQueryNotNull: (modelColumn: any) => {
+                onNullModelValue(modelColumn, "onNotNull");
+                return onObject;
+            },
+            orOnQueryNotNull: (modelColumn: any) => {
+                onNullModelValue(modelColumn, "orOnNotNull");
                 return onObject;
             },
         } as any;
