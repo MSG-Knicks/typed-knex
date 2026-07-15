@@ -1,5 +1,6 @@
 /* eslint-disable prefer-rest-params, no-unused-vars */
 import { Knex } from "knex";
+import * as PlainDate from "temporal-polyfill/fns/PlainDate";
 import { getColumnInformation, getColumnProperties, getPrimaryKeyColumn, getTableMetadata, getTableName } from "./decorators";
 import { NestedForeignKeyKeysOf, NestedKeysOf } from "./NestedKeysOf";
 import { NestedRecord } from "./NestedRecord";
@@ -1715,15 +1716,68 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         }
     }
 
+    private applyTemporalConversionsForRead(item: any): any {
+        if (item === null || item === undefined) {
+            return item;
+        }
+        if (Array.isArray(item)) {
+            return item.map((i) => this.applyTemporalConversionsForRead(i));
+        }
+
+        const rootColumns = getColumnProperties(this.tableClass);
+        for (const col of rootColumns) {
+            if (col.designType !== PlainDate) {
+                continue;
+            }
+            const val = item[col.propertyKey];
+            if (val === null || val === undefined) {
+                continue;
+            }
+            if (val instanceof Date) {
+                item[col.propertyKey] = PlainDate.from(val.toISOString().substring(0, 10));
+            } else if (typeof val === "string") {
+                item[col.propertyKey] = PlainDate.from(val);
+            }
+        }
+
+        for (const joined of this.extraJoinedProperties) {
+            const nestedItem = item[joined.name];
+            if (nestedItem === null || nestedItem === undefined) {
+                continue;
+            }
+            try {
+                const joinedColumns = getColumnProperties(joined.propertyType);
+                for (const col of joinedColumns) {
+                    if (col.designType !== PlainDate) {
+                        continue;
+                    }
+                    const val = nestedItem[col.propertyKey];
+                    if (val === null || val === undefined) {
+                        continue;
+                    }
+                    if (val instanceof Date) {
+                        nestedItem[col.propertyKey] = PlainDate.from(val.toISOString().substring(0, 10));
+                    } else if (typeof val === "string") {
+                        nestedItem[col.propertyKey] = PlainDate.from(val);
+                    }
+                }
+            } catch {
+                // joined type may not have @Column decorators (e.g. CTEs)
+            }
+        }
+
+        return item;
+    }
+
     private flattenByOption(o: any, flattenOption?: FlattenOption) {
         if (flattenOption === FlattenOption.noFlatten || this.shouldUnflatten === false) {
-            return o;
+            return this.applyTemporalConversionsForRead(o);
         }
         const unflattened = unflatten(o);
         if (flattenOption === undefined || flattenOption === FlattenOption.flatten) {
-            return unflattened;
+            return this.applyTemporalConversionsForRead(unflattened);
         }
-        return setToNull(unflattened);
+        return this.applyTemporalConversionsForRead(setToNull(unflattened));
     }
 
     private joinTableOnFunction(queryBuilderJoin: Knex.Join, newPropertyKey: any, newPropertyType: any, granularity: Granularity | undefined, onFunction: (join: IJoinOnClause2<any, any>) => void) {
@@ -1991,11 +2045,16 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     }
 
     public mapPropertiesToColumns(item: any) {
+        const columnsByPropertyKey = new Map(getColumnProperties(this.tableClass).map((c) => [c.propertyKey, c]));
         const propertyNames = Object.keys(item);
 
         for (const propertyName of propertyNames) {
-            const columnName = this.mapPropertyNameToColumnName(propertyName);
+            const col = columnsByPropertyKey.get(propertyName);
+            if (col?.designType === PlainDate && item[propertyName] instanceof PlainDate) {
+                item[propertyName] = (item[propertyName] as PlainDate).toString();
+            }
 
+            const columnName = this.mapPropertyNameToColumnName(propertyName);
             if (columnName !== propertyName) {
                 Object.defineProperty(item, columnName, Object.getOwnPropertyDescriptor(item, propertyName)!);
                 delete item[propertyName];
