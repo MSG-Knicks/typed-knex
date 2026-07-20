@@ -1,6 +1,5 @@
 /* eslint-disable prefer-rest-params, no-unused-vars */
 import { Knex } from "knex";
-import * as PlainDate from "temporal-polyfill/fns/PlainDate";
 import { getColumnInformation, getColumnProperties, getPrimaryKeyColumn, getTableMetadata, getTableName } from "./decorators";
 import { NestedForeignKeyKeysOf, NestedKeysOf } from "./NestedKeysOf";
 import { NestedRecord } from "./NestedRecord";
@@ -1726,7 +1725,10 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
         const rootColumns = getColumnProperties(this.tableClass);
         for (const col of rootColumns) {
-            if (col.designType !== PlainDate) {
+            if (col.propertyKey === 'game_date') {
+                console.log(col.propertyKey, col.designType, col.designType?.name);
+            }
+            if (col.designType?.name !== "PlainDate") {
                 continue;
             }
             const val = item[col.propertyKey];
@@ -1734,9 +1736,9 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
                 continue;
             }
             if (val instanceof Date) {
-                item[col.propertyKey] = PlainDate.from(val.toISOString().substring(0, 10));
+                item[col.propertyKey] = col.designType.from(val.toISOString().substring(0, 10));
             } else if (typeof val === "string") {
-                item[col.propertyKey] = PlainDate.from(val);
+                item[col.propertyKey] = col.designType.from(val);
             }
         }
 
@@ -1748,7 +1750,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             try {
                 const joinedColumns = getColumnProperties(joined.propertyType);
                 for (const col of joinedColumns) {
-                    if (col.designType !== PlainDate) {
+                    if (col.designType?.name !== "PlainDate") {
                         continue;
                     }
                     const val = nestedItem[col.propertyKey];
@@ -1756,9 +1758,9 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
                         continue;
                     }
                     if (val instanceof Date) {
-                        nestedItem[col.propertyKey] = PlainDate.from(val.toISOString().substring(0, 10));
+                        nestedItem[col.propertyKey] = col.designType.from(val.toISOString().substring(0, 10));
                     } else if (typeof val === "string") {
-                        nestedItem[col.propertyKey] = PlainDate.from(val);
+                        nestedItem[col.propertyKey] = col.designType.from(val);
                     }
                 }
             } catch {
@@ -2050,8 +2052,9 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
         for (const propertyName of propertyNames) {
             const col = columnsByPropertyKey.get(propertyName);
-            if (col?.designType === PlainDate && item[propertyName] instanceof PlainDate) {
-                item[propertyName] = (item[propertyName] as PlainDate).toString();
+            const val = item[propertyName];
+            if (col?.designType?.name === "PlainDate" && val?.constructor?.name === "PlainDate") {
+                item[propertyName] = val.toString();
             }
 
             const columnName = this.mapPropertyNameToColumnName(propertyName);
