@@ -1193,8 +1193,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             return this.callKnexFunctionWithConcatKeyColumn(this.queryBuilder.whereNot.bind(this.queryBuilder), ...arguments);
         }
         const columnArguments = this.getArgumentsFromColumnFunction(arguments[0]);
-        const designType = this.getDesignTypeForColumn(columnArguments);
-        this.queryBuilder.whereNot(this.getColumnName(...columnArguments), this.convertTemporalParam(arguments[1], designType));
+        this.queryBuilder.whereNot(this.getColumnName(...columnArguments), this.convertTemporalParam(arguments[1]));
         return this;
     }
 
@@ -1738,7 +1737,6 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             } else if (typeof val === "string") {
                 item[col.propertyKey] = Temporal.PlainDate.from(val);
             }
-            console.log(val, item[col.propertyKey]);
         }
 
         for (const joined of this.extraJoinedProperties) {
@@ -1820,15 +1818,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
         const onWithColumnOperatorValue = (joinedModelColumn: any, operator: any, value: any, functionName: keyof Knex.JoinClause) => {
             const column2Name = this.getColumnNameWithoutAlias(newPropertyKey, joinedModelColumn);
-            const designType = (() => {
-                try {
-                    const joinedTableClass = this.extraJoinedProperties.find((p) => p.name === newPropertyKey)?.propertyType;
-                    return joinedTableClass ? getColumnProperties(joinedTableClass).find((c) => c.propertyKey === joinedModelColumn)?.designType : undefined;
-                } catch {
-                    return undefined;
-                }
-            })();
-            knexOnObject[functionName](column2Name, operator, this.convertTemporalParam(value, designType));
+            knexOnObject[functionName](column2Name, operator, this.convertTemporalParam(value));
         };
         const onWithModelColumnOperatorValue = (modelColumn: any, operator: any, value: any, functionName: keyof Knex.JoinClause) => {
             let columnArguments;
@@ -1837,8 +1827,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             } else {
                 columnArguments = this.getArgumentsFromColumnFunction(modelColumn);
             }
-            const designType = this.getDesignTypeForColumn(columnArguments);
-            knexOnObject[functionName](this.getColumnName(...columnArguments), operator, this.convertTemporalParam(value, designType));
+            knexOnObject[functionName](this.getColumnName(...columnArguments), operator, this.convertTemporalParam(value));
         };
 
         const onNullValue = (joinedModelColumn: any, functionName: keyof Knex.JoinClause) => {
@@ -1969,26 +1958,12 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         return onObject;
     }
 
-    private getDesignTypeForColumn(columnArguments: string[]): any {
-        const propertyKey = columnArguments[columnArguments.length - 1];
-        const tableClass = columnArguments.length === 1 ? this.tableClass : this.extraJoinedProperties.find((p) => p.name === columnArguments[0])?.propertyType;
-        if (!tableClass) {
-            return undefined;
-        }
-        try {
-            return getColumnProperties(tableClass).find((c) => c.propertyKey === propertyKey)?.designType;
-        } catch {
-            return undefined;
-        }
-    }
-
-    private convertTemporalParam(value: any, designType?: any): any {
+    private convertTemporalParam(value: any): any {
         if (Array.isArray(value)) {
-            return value.map((v) => this.convertTemporalParam(v, designType));
+            return value.map((v) => this.convertTemporalParam(v));
         }
-        const isPlainDate = designType ? value instanceof designType : value?.constructor?.name === "PlainDate";
-        if (isPlainDate) {
-            return (value as { toString(): string }).toString();
+        if (value instanceof Temporal.PlainDate) {
+            return value.toString();
         }
         return value;
     }
@@ -1998,12 +1973,11 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             return this.callKnexFunctionWithConcatKeyColumn(knexFunction, ...args);
         }
         const columnArguments = this.getArgumentsFromColumnFunction(args[0]);
-        const designType = this.getDesignTypeForColumn(columnArguments);
 
         if (args.length === 3) {
-            knexFunction(this.getColumnName(...columnArguments), args[1], this.convertTemporalParam(args[2], designType));
+            knexFunction(this.getColumnName(...columnArguments), args[1], this.convertTemporalParam(args[2]));
         } else {
-            knexFunction(this.getColumnName(...columnArguments), this.convertTemporalParam(args[1], designType));
+            knexFunction(this.getColumnName(...columnArguments), this.convertTemporalParam(args[1]));
         }
 
         return this;
@@ -2011,13 +1985,12 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
     private callKnexFunctionWithConcatKeyColumn(knexFunction: any, ...args: any[]) {
         const columnArguments = args[0].split(".");
-        const designType = this.getDesignTypeForColumn(columnArguments);
         const columnName = this.getColumnName(...columnArguments);
 
         if (args.length === 3) {
-            knexFunction(columnName, args[1], this.convertTemporalParam(args[2], designType));
+            knexFunction(columnName, args[1], this.convertTemporalParam(args[2]));
         } else {
-            knexFunction(columnName, this.convertTemporalParam(args[1], designType));
+            knexFunction(columnName, this.convertTemporalParam(args[1]));
         }
 
         return this;
