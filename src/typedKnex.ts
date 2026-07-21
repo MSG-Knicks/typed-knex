@@ -1725,9 +1725,6 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
         const rootColumns = getColumnProperties(this.tableClass);
         for (const col of rootColumns) {
-            if (col.propertyKey === 'game_date') {
-                console.log(col.propertyKey, col.designType, col.designType?.name);
-            }
             if (col.designType?.name !== "PlainDate") {
                 continue;
             }

@@ -5,6 +5,7 @@
     "dependencies": {
         "flat": "5.0.2",
         "reflect-metadata": "0.1.13",
+        "temporal-polyfill": "^0.3.2",
         "ts-morph": "15.1.0",
         "yargs": "17.5.1"
     },
