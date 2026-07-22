@@ -632,7 +632,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     public async delByPrimaryKey(value: any) {
         const primaryKeyColumnInfo = getPrimaryKeyColumn(this.tableClass);
 
-        await this.queryBuilder.del().where(primaryKeyColumnInfo.name, value);
+        await this.queryBuilder.del().where(primaryKeyColumnInfo.name, this.convertTemporalParam(value));
     }
 
     public updateItemWithReturning(newObject: Partial<RemoveObjectsFrom<ModelType>>): Promise<RemoveObjectsFrom<ModelType>>;
@@ -746,7 +746,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
         const primaryKeyColumnInfo = getPrimaryKeyColumn(this.tableClass);
 
-        const query = this.queryBuilder.update(item).where(primaryKeyColumnInfo.name, primaryKeyValue);
+        const query = this.queryBuilder.update(item).where(primaryKeyColumnInfo.name, this.convertTemporalParam(primaryKeyValue));
 
         if (this.onlyLogQuery) {
             this.queryLog += query.toQuery() + "\n";
@@ -776,7 +776,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
                 this.mapPropertiesToColumns(item.data);
 
                 query.update(item.data);
-                sql += query.where(primaryKeyColumnInfo.name, item.primaryKeyValue).toString().replace("?", "\\?") + ";\n";
+                sql += query.where(primaryKeyColumnInfo.name, this.convertTemporalParam(item.primaryKeyValue)).toString().replace("?", "\\?") + ";\n";
             }
 
             const finalQuery = this.knex.raw(sql);
@@ -1172,7 +1172,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             this.queryBuilder.select(this.getColumnName(...columnArguments) + " as " + this.getColumnSelectAlias(...columnArguments));
         }
 
-        this.queryBuilder.where(primaryKeyColumnInfo.name, primaryKeyValue);
+        this.queryBuilder.where(primaryKeyColumnInfo.name, this.convertTemporalParam(primaryKeyValue));
 
         if (this.onlyLogQuery) {
             this.queryLog += this.queryBuilder.toQuery() + "\n";
@@ -1958,11 +1958,15 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         return onObject;
     }
 
+    private isTemporalPlainDate(value: any): value is Temporal.PlainDate {
+        return value instanceof Temporal.PlainDate || !!(value && value.constructor && value.constructor.name === "PlainDate" && typeof value.toString === "function");
+    }
+
     private convertTemporalParam(value: any): any {
         if (Array.isArray(value)) {
             return value.map((v) => this.convertTemporalParam(v));
         }
-        if (value instanceof Temporal.PlainDate) {
+        if (this.isTemporalPlainDate(value)) {
             return value.toString();
         }
         return value;
@@ -2059,7 +2063,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
         for (const propertyName of propertyNames) {
             const col = columnsByPropertyKey.get(propertyName);
-            if (col?.designType === Temporal.PlainDate && item[propertyName] instanceof Temporal.PlainDate) {
+            if (col?.designType === Temporal.PlainDate || this.isTemporalPlainDate(item[propertyName])) {
                 item[propertyName] = (item[propertyName] as Temporal.PlainDate).toString();
             }
 
