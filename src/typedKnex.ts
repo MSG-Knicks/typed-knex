@@ -1725,7 +1725,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
         const rootColumns = getColumnProperties(this.tableClass);
         for (const col of rootColumns) {
-            if (col.designType !== Temporal.PlainDate) {
+            if (!this.isPlainDateClass(col?.designType)) {
                 continue;
             }
             const val = item[col.propertyKey];
@@ -1734,7 +1734,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             }
             if (val instanceof Date) {
                 item[col.propertyKey] = Temporal.PlainDate.from(val.toISOString().substring(0, 10));
-            } else if (typeof val === "string") {
+            } else {
                 item[col.propertyKey] = Temporal.PlainDate.from(val);
             }
         }
@@ -1747,7 +1747,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             try {
                 const joinedColumns = getColumnProperties(joined.propertyType);
                 for (const col of joinedColumns) {
-                    if (col.designType !== Temporal.PlainDate) {
+                    if (!this.isPlainDateClass(col?.designType)) {
                         continue;
                     }
                     const val = nestedItem[col.propertyKey];
@@ -1756,7 +1756,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
                     }
                     if (val instanceof Date) {
                         nestedItem[col.propertyKey] = Temporal.PlainDate.from(val.toISOString().substring(0, 10));
-                    } else if (typeof val === "string") {
+                    } else {
                         nestedItem[col.propertyKey] = Temporal.PlainDate.from(val);
                     }
                 }
@@ -1958,7 +1958,11 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         return onObject;
     }
 
-    private isTemporalPlainDate(value: any): value is Temporal.PlainDate {
+    // once all environments can use native Temporal, this process should be simplified
+    private isPlainDateClass(type: any): type is typeof Temporal.PlainDate {
+        return type === Temporal.PlainDate || (type && type.name === "PlainDate");
+    }
+    private isPlainDateValue(value: any): value is Temporal.PlainDate {
         return value instanceof Temporal.PlainDate || !!(value && value.constructor && value.constructor.name === "PlainDate" && typeof value.toString === "function");
     }
 
@@ -1966,7 +1970,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         if (Array.isArray(value)) {
             return value.map((v) => this.convertTemporalParam(v));
         }
-        if (this.isTemporalPlainDate(value)) {
+        if (this.isPlainDateValue(value)) {
             return value.toString();
         }
         return value;
@@ -2063,7 +2067,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
         for (const propertyName of propertyNames) {
             const col = columnsByPropertyKey.get(propertyName);
-            if (col?.designType === Temporal.PlainDate || this.isTemporalPlainDate(item[propertyName])) {
+            if (this.isPlainDateClass(col?.designType) || this.isPlainDateValue(item[propertyName])) {
                 item[propertyName] = (item[propertyName] as Temporal.PlainDate).toString();
             }
 
