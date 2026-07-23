@@ -1768,8 +1768,10 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
                         let dateString = val.toISOString();
                         if (col.designType.name === "PlainDate" || col.designType.name === "PlainMonthDay" || col.designType.name === "PlainYearMonth") {
                             dateString = dateString.substring(0, 10);
+                        } else if (col.designType.name === "PlainDateTime") {
+                            dateString = dateString.substring(0, 23);
                         } else if (col.designType.name === "PlainTime") {
-                            dateString = dateString.substring(11, 23);
+                            dateString = dateString.substring(11, 23).padEnd(18, "0");
                         }
                         nestedItem[col.propertyKey] = col.designType.from(dateString);
                     } else {
@@ -2104,8 +2106,9 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
         for (const propertyName of propertyNames) {
             const col = columnsByPropertyKey.get(propertyName);
-            if (this.isTemporalClass(col?.designType) || this.isTemporalValue(item[propertyName])) {
-                item[propertyName] = item[propertyName].toString();
+            const val = item[propertyName];
+            if (val && (this.isTemporalClass(col?.designType) || this.isTemporalValue(val))) {
+                item[propertyName] = val.toString();
             }
 
             const columnName = this.mapPropertyNameToColumnName(propertyName);
