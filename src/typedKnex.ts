@@ -1737,8 +1737,10 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
                 let dateString = val.toISOString();
                 if (col.designType.name === "PlainDate" || col.designType.name === "PlainMonthDay" || col.designType.name === "PlainYearMonth") {
                     dateString = dateString.substring(0, 10);
+                } else if (col.designType.name === "PlainDateTime") {
+                    dateString = dateString.substring(0, 23);
                 } else if (col.designType.name === "PlainTime") {
-                    dateString = dateString.substring(11, 23);
+                    dateString = dateString.substring(11, 23).padEnd(18, "0");
                 }
                 item[col.propertyKey] = col.designType.from(dateString);
             } else {

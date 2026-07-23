@@ -1,12 +1,15 @@
 import { assert } from "chai";
 import { knex } from "knex";
 import { Temporal } from "temporal-polyfill";
+import mockDb from "mock-knex";
 import { TypedKnex } from "../../src/typedKnex";
 import { TemporalTestClassTable } from "../testTables";
 
 describe("Temporal", () => {
-    const typedKnex = new TypedKnex(knex({ client: "mssql" }));
-    (typedKnex as any).onlyLogQuery = true;
+    const knexConfig = knex({ client: "mssql" });
+    mockDb.mock(knexConfig);
+
+    const typedKnex = new TypedKnex(knexConfig);
 
     it("should return select Temporal class columns from table", (done) => {
         const query = typedKnex.query(TemporalTestClassTable).select("id", "sqlDateColumn", "sqlDateTimeColumn", "temporalDateColumn", "temporalTimeColumn", "temporalDateTimeColumn");
@@ -175,21 +178,6 @@ describe("Temporal", () => {
                 "insert into [temporal] ([sqlDateTimeColumn], [temporalDateColumn], [temporalDateTimeColumn], [temporalTimeColumn]) values ('2026-09-29 12:15:45.000', '2026-09-29', '2026-09-29T12:15:45', '12:15:45')"
             );
         });
-        it("insertItemWithReturning", async () => {
-            const query = typedKnex.query(TemporalTestClassTable);
-
-            (query as any).onlyLogQuery = true;
-            await query.insertItemWithReturning({
-                sqlDateTimeColumn: date,
-                temporalDateColumn: plainDate,
-                temporalDateTimeColumn: plainDateTime,
-                temporalTimeColumn: plainTime,
-            });
-            assert.equal(
-                (query as any).queryLog.trim(),
-                `insert into [temporal] ([sqlDateTimeColumn], [temporalDateColumn], [temporalDateTimeColumn], [temporalTimeColumn]) output inserted.* values ('2026-09-29 12:15:45.000', "2026-09-29", "2026-09-29T12:15:45", "12:15:45")`
-            );
-        });
         it("updateItem", async () => {
             const query = typedKnex.query(TemporalTestClassTable).where("id", "test");
 
@@ -203,21 +191,6 @@ describe("Temporal", () => {
             assert.equal(
                 (query as any).queryLog.trim(),
                 "update [temporal] set [sqlDateTimeColumn] = '2026-09-29 12:15:45.000', [temporalDateColumn] = '2026-09-29', [temporalDateTimeColumn] = '2026-09-29T12:15:45', [temporalTimeColumn] = '12:15:45' where [temporal].[id] = 'test';select @@rowcount"
-            );
-        });
-        it("updateItemWithReturning", async () => {
-            const query = typedKnex.query(TemporalTestClassTable).where("id", "test");
-
-            (query as any).onlyLogQuery = true;
-            await query.updateItemWithReturning({
-                sqlDateTimeColumn: date,
-                temporalDateColumn: plainDate,
-                temporalDateTimeColumn: plainDateTime,
-                temporalTimeColumn: plainTime,
-            });
-            assert.equal(
-                (query as any).queryLog.trim(),
-                `update [temporal] set [sqlDateTimeColumn] = '2026-09-29 12:15:45.000', [temporalDateColumn] = '2026-09-29', [temporalDateTimeColumn] = '2026-09-29T12:15:45', [temporalTimeColumn] = '12:15:45' output inserted.* where [temporal].[id] = 'test'`
             );
         });
         it("updateItemByPrimaryKey", async () => {
@@ -250,6 +223,116 @@ describe("Temporal", () => {
                 },
             ]);
             assert.equal((query as any).queryLog.trim(), `insert into [temporal] ([sqlDateTimeColumn], [temporalDateColumn]) values ('2026-09-29 12:15:45.000', '2026-09-29'), ('2026-09-29 12:15:45.000', '2026-10-04')`);
+        });
+    });
+
+    describe("should convert Date columns from the database to Temporal objects on select", () => {
+        let tracker: mockDb.Tracker;
+        beforeEach(() => {
+            tracker = mockDb.getTracker();
+            tracker.install();
+        });
+        afterEach(() => {
+            tracker.uninstall();
+        });
+
+        type TemporalTestClassDatabaseTableRow = {
+            [K in keyof TemporalTestClassTable]: TemporalTestClassTable[K] extends string | number | boolean ? TemporalTestClassTable[K] : Date;
+        };
+
+        const dbData: Partial<TemporalTestClassDatabaseTableRow> = {
+            id: "test",
+            sqlDateColumn: new Date("2026-09-29"),
+            sqlDateTimeColumn: new Date("2026-09-29T12:15:45"),
+            temporalDateColumn: new Date(Date.UTC(2026, 8, 29)),
+            temporalDateTimeColumn: new Date(Date.UTC(2026, 8, 29, 12, 15, 45)),
+            temporalTimeColumn: new Date(new Date(Date.UTC(1970, 0, 1, 12, 15, 45))),
+        };
+        const expectedData: TemporalTestClassTable = {
+            id: "test",
+            sqlDateColumn: new Date("2026-09-29"),
+            sqlDateTimeColumn: new Date("2026-09-29T12:15:45"),
+            temporalDateColumn: Temporal.PlainDate.from("2026-09-29"),
+            temporalDateTimeColumn: Temporal.PlainDateTime.from("2026-09-29T12:15:45"),
+            temporalTimeColumn: Temporal.PlainTime.from("12:15:45"),
+        };
+
+        it("getMany", async () => {
+            tracker.on("query", (query) => {
+                assert.deepEqual(query.bindings, ["test"]);
+                query.response([dbData]);
+            });
+
+            const [actual] = await typedKnex.query(TemporalTestClassTable).where("id", "test").getMany();
+            assert.equal(actual.id, expectedData.id);
+            assert.equal(actual.sqlDateColumn.getTime(), expectedData.sqlDateColumn.getTime());
+            assert.equal(Temporal.PlainDate.compare(actual.temporalDateColumn, expectedData.temporalDateColumn), 0);
+            assert.equal(Temporal.PlainDateTime.compare(actual.temporalDateTimeColumn, expectedData.temporalDateTimeColumn), 0);
+            assert.equal(Temporal.PlainTime.compare(actual.temporalTimeColumn, expectedData.temporalTimeColumn), 0);
+        });
+        it("getSingle", async () => {
+            tracker.on("query", (query) => {
+                assert.deepEqual(query.bindings, ["test"]);
+                query.response([dbData]);
+            });
+
+            const actual = await typedKnex.query(TemporalTestClassTable).where("id", "test").getSingle();
+            assert.equal(actual.id, expectedData.id);
+            assert.equal(actual.sqlDateColumn.getTime(), expectedData.sqlDateColumn.getTime());
+            assert.equal(Temporal.PlainDate.compare(actual.temporalDateColumn, expectedData.temporalDateColumn), 0);
+            assert.equal(Temporal.PlainDateTime.compare(actual.temporalDateTimeColumn, expectedData.temporalDateTimeColumn), 0);
+            assert.equal(Temporal.PlainTime.compare(actual.temporalTimeColumn, expectedData.temporalTimeColumn), 0);
+        });
+        it("getFirst", async () => {
+            tracker.on("query", (query) => {
+                assert.deepEqual(query.bindings, ["test"]);
+                query.response([dbData]);
+            });
+
+            const actual = await typedKnex.query(TemporalTestClassTable).where("id", "test").getFirst();
+            assert.equal(actual.id, expectedData.id);
+            assert.equal(actual.sqlDateColumn.getTime(), expectedData.sqlDateColumn.getTime());
+            assert.equal(Temporal.PlainDate.compare(actual.temporalDateColumn, expectedData.temporalDateColumn), 0);
+            assert.equal(Temporal.PlainDateTime.compare(actual.temporalDateTimeColumn, expectedData.temporalDateTimeColumn), 0);
+            assert.equal(Temporal.PlainTime.compare(actual.temporalTimeColumn, expectedData.temporalTimeColumn), 0);
+        });
+        it("insertItemWithReturning", async () => {
+            tracker.on("query", (query) => {
+                assert.deepEqual(query.bindings, [expectedData.sqlDateTimeColumn, "2026-09-29", "2026-09-29T12:15:45", "12:15:45"]);
+                query.response([dbData]);
+            });
+
+            const actual = await typedKnex.query(TemporalTestClassTable).insertItemWithReturning({
+                sqlDateTimeColumn: expectedData.sqlDateTimeColumn,
+                temporalDateColumn: expectedData.temporalDateColumn,
+                temporalDateTimeColumn: expectedData.temporalDateTimeColumn,
+                temporalTimeColumn: expectedData.temporalTimeColumn,
+            });
+
+            assert.equal(actual.id, expectedData.id);
+            assert.equal(actual.sqlDateColumn.getTime(), expectedData.sqlDateColumn.getTime());
+            assert.equal(Temporal.PlainDate.compare(actual.temporalDateColumn, expectedData.temporalDateColumn), 0);
+            assert.equal(Temporal.PlainDateTime.compare(actual.temporalDateTimeColumn, expectedData.temporalDateTimeColumn), 0);
+            assert.equal(Temporal.PlainTime.compare(actual.temporalTimeColumn, expectedData.temporalTimeColumn), 0);
+        });
+        it("updateItemWithReturning", async () => {
+            tracker.on("query", (query) => {
+                assert.deepEqual(query.bindings, [expectedData.sqlDateTimeColumn, "2026-09-29", "2026-09-29T12:15:45", "12:15:45", "test"]);
+                query.response([dbData]);
+            });
+
+            const actual = await typedKnex.query(TemporalTestClassTable).where("id", "test").updateItemWithReturning({
+                sqlDateTimeColumn: expectedData.sqlDateTimeColumn,
+                temporalDateColumn: expectedData.temporalDateColumn,
+                temporalDateTimeColumn: expectedData.temporalDateTimeColumn,
+                temporalTimeColumn: expectedData.temporalTimeColumn,
+            });
+
+            assert.equal(actual.id, expectedData.id);
+            assert.equal(actual.sqlDateColumn.getTime(), expectedData.sqlDateColumn.getTime());
+            assert.equal(Temporal.PlainDate.compare(actual.temporalDateColumn, expectedData.temporalDateColumn), 0);
+            assert.equal(Temporal.PlainDateTime.compare(actual.temporalDateTimeColumn, expectedData.temporalDateTimeColumn), 0);
+            assert.equal(Temporal.PlainTime.compare(actual.temporalTimeColumn, expectedData.temporalTimeColumn), 0);
         });
     });
 });
