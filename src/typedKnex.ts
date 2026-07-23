@@ -1725,17 +1725,24 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
         const rootColumns = getColumnProperties(this.tableClass);
         for (const col of rootColumns) {
-            if (!this.isPlainDateClass(col?.designType)) {
+            if (!this.isTemporalClass(col?.designType)) {
                 continue;
             }
             const val = item[col.propertyKey];
             if (val === null || val === undefined) {
                 continue;
             }
+
             if (val instanceof Date) {
-                item[col.propertyKey] = Temporal.PlainDate.from(val.toISOString().substring(0, 10));
+                let dateString = val.toISOString();
+                if (col.designType.name === "PlainDate" || col.designType.name === "PlainMonthDay" || col.designType.name === "PlainYearMonth") {
+                    dateString = dateString.substring(0, 10);
+                } else if (col.designType.name === "PlainTime") {
+                    dateString = dateString.substring(11, 23);
+                }
+                item[col.propertyKey] = col.designType.from(dateString);
             } else {
-                item[col.propertyKey] = Temporal.PlainDate.from(val);
+                item[col.propertyKey] = col.designType.from(val);
             }
         }
 
@@ -1747,17 +1754,24 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             try {
                 const joinedColumns = getColumnProperties(joined.propertyType);
                 for (const col of joinedColumns) {
-                    if (!this.isPlainDateClass(col?.designType)) {
+                    if (!this.isTemporalClass(col?.designType)) {
                         continue;
                     }
                     const val = nestedItem[col.propertyKey];
                     if (val === null || val === undefined) {
                         continue;
                     }
+
                     if (val instanceof Date) {
-                        nestedItem[col.propertyKey] = Temporal.PlainDate.from(val.toISOString().substring(0, 10));
+                        let dateString = val.toISOString();
+                        if (col.designType.name === "PlainDate" || col.designType.name === "PlainMonthDay" || col.designType.name === "PlainYearMonth") {
+                            dateString = dateString.substring(0, 10);
+                        } else if (col.designType.name === "PlainTime") {
+                            dateString = dateString.substring(11, 23);
+                        }
+                        nestedItem[col.propertyKey] = col.designType.from(dateString);
                     } else {
-                        nestedItem[col.propertyKey] = Temporal.PlainDate.from(val);
+                        nestedItem[col.propertyKey] = col.designType.from(val);
                     }
                 }
             } catch {
@@ -1959,18 +1973,39 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
     }
 
     // once all environments can use native Temporal, this process should be simplified
-    private isPlainDateClass(type: any): type is typeof Temporal.PlainDate {
-        return type === Temporal.PlainDate || (type && type.name === "PlainDate");
+    private TEMPORAL_CLASS_NAMES: Readonly<Set<string>> = new Set(["PlainDate", "PlainDateTime", "PlainMonthDay", "PlainTime", "PlainYearMonth", "ZonedDateTime"]);
+    private isTemporalClass(
+        designType: any
+    ): designType is typeof Temporal.PlainDate | typeof Temporal.PlainDateTime | typeof Temporal.PlainMonthDay | typeof Temporal.PlainTime | typeof Temporal.PlainYearMonth | typeof Temporal.ZonedDateTime {
+        return (
+            designType === Temporal.PlainDate ||
+            designType === Temporal.PlainDateTime ||
+            designType === Temporal.PlainMonthDay ||
+            designType === Temporal.PlainTime ||
+            designType === Temporal.PlainYearMonth ||
+            designType === Temporal.ZonedDateTime ||
+            // fallback for environments where Temporal class definitions may differ
+            (designType && this.TEMPORAL_CLASS_NAMES.has(designType.name) && typeof designType.from === "function")
+        );
     }
-    private isPlainDateValue(value: any): value is Temporal.PlainDate {
-        return value instanceof Temporal.PlainDate || !!(value && value.constructor && value.constructor.name === "PlainDate" && typeof value.toString === "function");
+    private isTemporalValue(value: any): value is Temporal.PlainDate | Temporal.PlainDateTime | Temporal.PlainMonthDay | Temporal.PlainTime | Temporal.PlainYearMonth | Temporal.ZonedDateTime {
+        return (
+            value instanceof Temporal.PlainDate ||
+            value instanceof Temporal.PlainDateTime ||
+            value instanceof Temporal.PlainMonthDay ||
+            value instanceof Temporal.PlainTime ||
+            value instanceof Temporal.PlainYearMonth ||
+            value instanceof Temporal.ZonedDateTime ||
+            // fallback for environments where Temporal class definitions may differ
+            !!(value && value.constructor && this.TEMPORAL_CLASS_NAMES.has(value.constructor.name) && typeof value.toString === "function")
+        );
     }
 
     private convertTemporalParam(value: any): any {
         if (Array.isArray(value)) {
             return value.map((v) => this.convertTemporalParam(v));
         }
-        if (this.isPlainDateValue(value)) {
+        if (this.isTemporalValue(value)) {
             return value.toString();
         }
         return value;
@@ -2067,8 +2102,8 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
 
         for (const propertyName of propertyNames) {
             const col = columnsByPropertyKey.get(propertyName);
-            if (this.isPlainDateClass(col?.designType) || this.isPlainDateValue(item[propertyName])) {
-                item[propertyName] = (item[propertyName] as Temporal.PlainDate).toString();
+            if (this.isTemporalClass(col?.designType) || this.isTemporalValue(item[propertyName])) {
+                item[propertyName] = item[propertyName].toString();
             }
 
             const columnName = this.mapPropertyNameToColumnName(propertyName);
