@@ -661,6 +661,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             const item = rows[0];
 
             this.mapColumnsToProperties(item);
+            this.applyTemporalConversionsForRead(item);
 
             return item;
         }
@@ -692,6 +693,7 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
             const item = rows[0];
 
             this.mapColumnsToProperties(item);
+            this.applyTemporalConversionsForRead(item);
 
             return item;
         }
