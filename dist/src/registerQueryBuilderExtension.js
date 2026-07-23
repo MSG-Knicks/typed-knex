@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.registerQueryBuilderExtension = void 0;
+const typedKnex_1 = require("./typedKnex");
+function registerQueryBuilderExtension(name, fun) {
+    typedKnex_1.TypedQueryBuilder.prototype[name] = function () {
+        return fun.bind(this)(...arguments);
+    };
+}
+exports.registerQueryBuilderExtension = registerQueryBuilderExtension;
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoicmVnaXN0ZXJRdWVyeUJ1aWxkZXJFeHRlbnNpb24uanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi9zcmMvcmVnaXN0ZXJRdWVyeUJ1aWxkZXJFeHRlbnNpb24udHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6Ijs7O0FBQUEsMkNBQWdEO0FBRWhELFNBQWdCLDZCQUE2QixDQUFDLElBQVksRUFBRSxHQUFhO0lBQ3BFLDZCQUF5QixDQUFDLFNBQVMsQ0FBQyxJQUFJLENBQUMsR0FBRztRQUN6QyxPQUFPLEdBQUcsQ0FBQyxJQUFJLENBQUMsSUFBSSxDQUFDLENBQUMsR0FBRyxTQUFTLENBQUMsQ0FBQztJQUN4QyxDQUFDLENBQUM7QUFDTixDQUFDO0FBSkQsc0VBSUMiLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgeyBUeXBlZFF1ZXJ5QnVpbGRlciB9IGZyb20gXCIuL3R5cGVkS25leFwiO1xuXG5leHBvcnQgZnVuY3Rpb24gcmVnaXN0ZXJRdWVyeUJ1aWxkZXJFeHRlbnNpb24obmFtZTogc3RyaW5nLCBmdW46IEZ1bmN0aW9uKSB7XG4gICAgKFR5cGVkUXVlcnlCdWlsZGVyIGFzIGFueSkucHJvdG90eXBlW25hbWVdID0gZnVuY3Rpb24gKCkge1xuICAgICAgICByZXR1cm4gZnVuLmJpbmQodGhpcykoLi4uYXJndW1lbnRzKTtcbiAgICB9O1xufVxuIl19
