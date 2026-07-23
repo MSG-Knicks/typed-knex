@@ -1,3 +1,4 @@
+import { Temporal } from "temporal-polyfill";
 import { Column, Table } from "../src/decorators";
 import { ICustomDatabaseType } from "../src/ICustomDatabaseType";
 
@@ -110,4 +111,25 @@ export class correctTableName {
     public id!: string;
     @Column()
     public code: number;
+}
+
+@Table("temporal")
+export class TemporalTestClassTable {
+    @Column({ primary: true })
+    public id!: string;
+
+    @Column()
+    public temporalDateColumn: Temporal.PlainDate;
+
+    @Column()
+    public temporalTimeColumn: Temporal.PlainTime;
+
+    @Column()
+    public temporalDateTimeColumn: Temporal.PlainDateTime;
+
+    @Column()
+    public sqlDateColumn: Date;
+
+    @Column()
+    public sqlDateTimeColumn: Date;
 }

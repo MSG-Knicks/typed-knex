@@ -5,6 +5,7 @@
     "dependencies": {
         "flat": "5.0.2",
         "reflect-metadata": "0.1.13",
+        "temporal-polyfill": "^0.3.2",
         "ts-morph": "15.1.0",
         "yargs": "17.5.1"
     },
@@ -51,6 +52,7 @@
         "@types/chai-as-promised": "7.1.5",
         "@types/flat": "5.0.2",
         "@types/mocha": "9.1.1",
+        "@types/mock-knex": "^0.4.8",
         "@types/node": "18.7.6",
         "@types/yargs": "17.0.11",
         "@typescript-eslint/eslint-plugin": "5.33.1",
@@ -67,6 +69,7 @@
         "knex": "2.2.0",
         "lint-staged": "13.0.3",
         "mocha": "10.0.0",
+        "mock-knex": "^0.4.13",
         "npm-check-updates": "16.0.5",
         "prettier": "2.7.1",
         "rimraf": "3.0.2",
