@@ -1019,9 +1019,10 @@ describe("TypedKnexQueryBuilder", () => {
     it("should return metadata from tables", (done) => {
         const tables = getTables();
 
-        assert.equal(tables.length, 6);
+        assert.equal(tables.length, 7);
         assert.exists(tables.find((i) => i.tableName === "users"));
         assert.exists(tables.find((i) => i.tableName === "correctTableName"));
+        assert.exists(tables.find((i) => i.tableName === "temporal"));
 
         const noLockTable = tables.find((i) => i.tableName === "nolockTable");
         assert.equal(noLockTable?.defaultLock, "NOLOCK");
