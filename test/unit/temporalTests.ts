@@ -178,6 +178,17 @@ describe("Temporal", () => {
                 "insert into [temporal] ([sqlDateTimeColumn], [temporalDateColumn], [temporalDateTimeColumn], [temporalTimeColumn]) values ('2026-09-29 12:15:45.000', '2026-09-29', '2026-09-29T12:15:45', '12:15:45')"
             );
         });
+        it("insertItem with nullable Temporal columns", async () => {
+            const query = typedKnex.query(TemporalTestClassTable);
+
+            (query as any).onlyLogQuery = true;
+            await query.insertItem({
+                temporalDateColumn: plainDate,
+                nullableTemporalDateColumn: plainDate2,
+                nullableTemporalDateTimeColumn: null,
+            });
+            assert.equal((query as any).queryLog.trim(), "insert into [temporal] ([nullableTemporalDateColumn], [nullableTemporalDateTimeColumn], [temporalDateColumn]) values ('2026-10-04', NULL, '2026-09-29')");
+        });
         it("updateItem", async () => {
             const query = typedKnex.query(TemporalTestClassTable).where("id", "test");
 
@@ -237,7 +248,7 @@ describe("Temporal", () => {
         });
 
         type TemporalTestClassDatabaseTableRow = {
-            [K in keyof TemporalTestClassTable]: TemporalTestClassTable[K] extends string | number | boolean ? TemporalTestClassTable[K] : Date;
+            [K in keyof TemporalTestClassTable]: TemporalTestClassTable[K] extends string | number | boolean ? TemporalTestClassTable[K] : null extends TemporalTestClassTable[K] ? Date | null : Date;
         };
 
         const dbData: Partial<TemporalTestClassDatabaseTableRow> = {
@@ -247,6 +258,13 @@ describe("Temporal", () => {
             temporalDateColumn: new Date(Date.UTC(2026, 8, 29)),
             temporalDateTimeColumn: new Date(Date.UTC(2026, 8, 29, 12, 15, 45)),
             temporalTimeColumn: new Date(new Date(Date.UTC(1970, 0, 1, 12, 15, 45))),
+            nullableTemporalDateColumn: new Date(Date.UTC(2026, 8, 29)),
+            nullableTemporalDateTimeColumn: new Date(Date.UTC(2026, 8, 29, 12, 15, 45)),
+        };
+        const dbDataWithNulls: Partial<TemporalTestClassDatabaseTableRow> = {
+            ...dbData,
+            nullableTemporalDateColumn: null,
+            nullableTemporalDateTimeColumn: null,
         };
         const expectedData: TemporalTestClassTable = {
             id: "test",
@@ -255,6 +273,8 @@ describe("Temporal", () => {
             temporalDateColumn: Temporal.PlainDate.from("2026-09-29"),
             temporalDateTimeColumn: Temporal.PlainDateTime.from("2026-09-29T12:15:45"),
             temporalTimeColumn: Temporal.PlainTime.from("12:15:45"),
+            nullableTemporalDateColumn: Temporal.PlainDate.from("2026-09-29"),
+            nullableTemporalDateTimeColumn: Temporal.PlainDateTime.from("2026-09-29T12:15:45"),
         };
 
         it("getMany", async () => {
@@ -269,6 +289,33 @@ describe("Temporal", () => {
             assert.equal(Temporal.PlainDate.compare(actual.temporalDateColumn, expectedData.temporalDateColumn), 0);
             assert.equal(Temporal.PlainDateTime.compare(actual.temporalDateTimeColumn, expectedData.temporalDateTimeColumn), 0);
             assert.equal(Temporal.PlainTime.compare(actual.temporalTimeColumn, expectedData.temporalTimeColumn), 0);
+            assert.instanceOf(actual.nullableTemporalDateColumn, Temporal.PlainDate);
+            assert.instanceOf(actual.nullableTemporalDateTimeColumn, Temporal.PlainDateTime);
+        });
+
+        it("getMany with nullable Temporal columns", async () => {
+            tracker.on("query", (query) => {
+                assert.deepEqual(query.bindings, ["test"]);
+                query.response([dbData]);
+            });
+
+            const [actual] = await typedKnex.query(TemporalTestClassTable).where("id", "test").getMany();
+            assert.instanceOf(actual.nullableTemporalDateColumn, Temporal.PlainDate);
+            assert.equal(actual.nullableTemporalDateColumn!.toString(), "2026-09-29");
+            assert.instanceOf(actual.nullableTemporalDateTimeColumn, Temporal.PlainDateTime);
+            assert.equal(actual.nullableTemporalDateTimeColumn!.toString(), "2026-09-29T12:15:45");
+        });
+
+        it("getMany with null values in nullable Temporal columns", async () => {
+            tracker.on("query", (query) => {
+                assert.deepEqual(query.bindings, ["test"]);
+                query.response([dbDataWithNulls]);
+            });
+
+            const [actual] = await typedKnex.query(TemporalTestClassTable).where("id", "test").getMany();
+            assert.isNull(actual.nullableTemporalDateColumn);
+            assert.isNull(actual.nullableTemporalDateTimeColumn);
+            assert.equal(Temporal.PlainDate.compare(actual.temporalDateColumn, expectedData.temporalDateColumn), 0);
         });
         it("getSingle", async () => {
             tracker.on("query", (query) => {

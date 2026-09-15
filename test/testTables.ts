@@ -127,6 +127,12 @@ export class TemporalTestClassTable {
     @Column()
     public temporalDateTimeColumn: Temporal.PlainDateTime;
 
+    @Column({ type: Temporal.PlainDate })
+    public nullableTemporalDateColumn: Temporal.PlainDate | null;
+
+    @Column({ type: Temporal.PlainDateTime })
+    public nullableTemporalDateTimeColumn: Temporal.PlainDateTime | null;
+
     @Column()
     public sqlDateColumn: Date;
 

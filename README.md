@@ -95,6 +95,16 @@ Use `@Column({ primary: true })` for primary key columns.
 
 Use `@Column({ name: '[column name]' })` on property with the type of another `Table` to reference another table.
 
+Use `@Column({ type: [Temporal class] })` for nullable `Temporal` columns. TypeScript erases union types to `Object` in the decorator metadata, so the `Temporal` class of a property declared as `Temporal.PlainDate | null` has to be passed explicitly, otherwise values read from the database are not converted.
+
+```ts
+@Column()
+public startDate: Temporal.PlainDate;
+
+@Column({ type: Temporal.PlainDate })
+public endDate: Temporal.PlainDate | null;
+```
+
 ```ts
 import { Column, Table } from "@wwwouter/typed-knex";
 

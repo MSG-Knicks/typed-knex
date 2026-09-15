@@ -1,5 +1,8 @@
+import type { Temporal } from "temporal-polyfill";
 import "reflect-metadata";
 import type { Granularity } from "./typedKnex";
+
+export type TemporalColumnType = typeof Temporal.PlainDate | typeof Temporal.PlainDateTime | typeof Temporal.PlainMonthDay | typeof Temporal.PlainTime | typeof Temporal.PlainYearMonth | typeof Temporal.ZonedDateTime;
 
 interface IColumnData {
     name: string;
@@ -10,6 +13,7 @@ interface IColumnData {
     propertyKey: string;
     isForeignKey: boolean;
     designType: any;
+    columnType: TemporalColumnType | any;
 }
 
 type TableMetadata = {
@@ -69,6 +73,12 @@ interface IColumnOptions {
      * Indicates if this column is a primary key.
      */
     primary?: boolean;
+
+    /**
+     * The Temporal class of this column. Required when the property's declared type is a union
+     * (e.g. `Temporal.PlainDate | null`), because decorator metadata erases unions to `Object`.
+     */
+    type?: TemporalColumnType;
 }
 
 export function Column(options?: IColumnOptions): (target: object, propertyKey: string) => void {
@@ -95,7 +105,7 @@ function getRegisterColumn(options?: IColumnOptions) {
             primary = options.primary === true;
         }
 
-        columns.push({ name, primary, propertyKey, isForeignKey, designType });
+        columns.push({ name, primary, propertyKey, isForeignKey, designType, columnType: options?.type ?? designType });
         target.constructor.prototype.tableColumns = columns;
     }
 
@@ -121,6 +131,7 @@ export function getColumnInformation(target: Function, propertyKey: string): { c
         primary: property.primary,
         propertyKey: property.propertyKey,
         designType: property.designType,
+        columnType: property.columnType,
         isForeignKey: property.isForeignKey,
     };
 }
