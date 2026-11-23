@@ -427,6 +427,51 @@ describe("TypedKnexQueryBuilder", () => {
         done();
     });
 
+    it("should select coalesce of columns", (done) => {
+        const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
+        const query = typedKnex.query(User).coalesce("displayName", "nickName", "name");
+        const queryString = query.toQuery();
+        assert.equal(queryString, 'select COALESCE("users"."nickName", "users"."name") as "displayName" from "users"');
+
+        done();
+    });
+
+    it("should select coalesce of three columns using database column names", (done) => {
+        const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
+        const query = typedKnex.query(User).coalesce("x", "status", "notUndefinedStatus", "name");
+        const queryString = query.toQuery();
+        assert.equal(queryString, 'select COALESCE("users"."weirdDatabaseName", "users"."weirdDatabaseName2", "users"."name") as "x" from "users"');
+
+        done();
+    });
+
+    it("should select coalesce of joined and own columns", (done) => {
+        const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
+        const query = typedKnex.query(UserSetting).innerJoinColumn("user").coalesce("userName", "user.name", "value");
+        const queryString = query.toQuery();
+        assert.equal(queryString, 'select COALESCE("user"."name", "userSettings"."value") as "userName" from "userSettings" inner join "users" as "user" on "user"."id" = "userSettings"."userId"');
+
+        done();
+    });
+
+    it("should select coalesce with a dotted alias without splitting it", (done) => {
+        const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
+        const query = typedKnex.query(User).coalesce("a.b", "nickName", "name");
+        const queryString = query.toQuery();
+        assert.equal(queryString, 'select COALESCE("users"."nickName", "users"."name") as "a.b" from "users"');
+
+        done();
+    });
+
+    it("should select coalesce next to other selected columns", (done) => {
+        const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
+        const query = typedKnex.query(User).select("id").coalesce("displayName", "nickName", "name");
+        const queryString = query.toQuery();
+        assert.equal(queryString, 'select "users"."id" as "id", COALESCE("users"."nickName", "users"."name") as "displayName" from "users"');
+
+        done();
+    });
+
     it("should create query with AND in where clause", (done) => {
         const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
         const query = typedKnex.query(User).where("name", "user1").andWhere("name", "user2").andWhere("name", "like", "%user%");
