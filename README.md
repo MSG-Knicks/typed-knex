@@ -492,13 +492,13 @@ typedKnex.query(User).leftOuterJoinTableOnFunction("evilTwin", User, (join) => {
 
 ### coalesce
 
-Selects `COALESCE(...)` over two or more columns under an alias. The result type is the union of the selected column types.
+Selects `coalesce(...)` over two or more columns under an alias. The result type is the union of the selected column types.
 
 ```ts
 const item = await typedKnex.query(User).coalesce("displayName", "nickName", "name").getFirst();
 // item.displayName: string | undefined   (union of the nickName and name column types)
 
-// select COALESCE("users"."nickName", "users"."name") as "displayName" from "users"
+// select coalesce("users"."nickName", "users"."name") as "displayName" from "users"
 ```
 
 Joined columns work too:
@@ -506,7 +506,7 @@ Joined columns work too:
 ```ts
 typedKnex.query(UserSetting).innerJoinColumn("user").coalesce("userName", "user.name", "value");
 
-// select COALESCE("user"."name", "userSettings"."value") as "userName" from "userSettings" inner join "users" as "user" on "user"."id" = "userSettings"."userId"
+// select coalesce("user"."name", "userSettings"."value") as "userName" from "userSettings" inner join "users" as "user" on "user"."id" = "userSettings"."userId"
 ```
 
 At least two columns are required. The return type is the plain union of the column types. It is not narrowed when one column is non-nullable. Columns from `leftOuterJoin` are not typed as nullable by this library, so their types are used as declared.
