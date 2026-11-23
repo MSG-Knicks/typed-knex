@@ -33,3 +33,25 @@ export async function exactOptionalPropertyTypes() {
 
     await typedKnex.query(UserSetting).updateItem({ id: "id", initialValue: undefined });
 }
+
+export async function coalesce() {
+    const typedKnex = new TypedKnex(knex({ client: "postgresql" }));
+
+    const mixed = await typedKnex.query(User).coalesce("combined", "name", "numericValue").getSingle();
+    // eslint-disable-next-line no-unused-vars
+    type mixedChecks = [Expect<NotAny<typeof mixed.combined>>, Expect<Equal<typeof mixed.combined, string | number>>];
+
+    const nullable = await typedKnex.query(User).coalesce("combined", "nickName", "someNullableValue").getSingle();
+    // eslint-disable-next-line no-unused-vars
+    type nullableChecks = [Expect<Equal<typeof nullable.combined, string | null | undefined>>];
+
+    const joined = await typedKnex.query(UserSetting).innerJoinColumn("user").coalesce("combined", "user.numericValue", "value").getSingle();
+    // eslint-disable-next-line no-unused-vars
+    type joinedChecks = [Expect<Equal<typeof joined.combined, number | string>>];
+
+    // @ts-expect-error - should fail, at least two columns are required
+    await typedKnex.query(User).coalesce("combined", "name").getSingle();
+
+    // @ts-expect-error - should fail, unknown column
+    await typedKnex.query(User).coalesce("combined", "name", "unknown").getSingle();
+}

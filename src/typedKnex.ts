@@ -107,6 +107,7 @@ export interface ITypedQueryBuilder<Model, SelectableModel, Row> {
 
     selectAlias: ISelectAlias<Model, SelectableModel, Row extends Model ? {} : Row>;
     selectRaw: ISelectRaw<Model, SelectableModel, Row extends Model ? {} : Row>;
+    coalesce: ICoalesce<Model, SelectableModel, Row extends Model ? {} : Row>;
 
     findByPrimaryKey: IFindByPrimaryKey<Model, SelectableModel, Row extends Model ? {} : Row>;
 
@@ -352,6 +353,15 @@ interface ISelectRaw<Model, SelectableModel, Row> {
         SelectableModel,
         Record<TName, ObjectToPrimitive<TReturn>> & Row
     >;
+}
+
+interface ICoalesce<Model, SelectableModel, Row> {
+    <ConcatKey extends NestedKeysOf<NonNullableRecursive<SelectableModel>, keyof NonNullableRecursive<SelectableModel>, "">, TName extends keyof any>(
+        alias: TName,
+        first: ConcatKey,
+        second: ConcatKey,
+        ...rest: ConcatKey[]
+    ): ITypedQueryBuilder<Model, SelectableModel, Row & Record<TName, GetNestedPropertyType<SelectableModel, ConcatKey>>>;
 }
 
 interface ISelectQuery<Model, SelectableModel, Row> {
@@ -995,6 +1005,17 @@ export class TypedQueryBuilder<ModelType, SelectableModel, Row = {}> implements 
         const [name, _, query, ...bindings] = Array.from(arguments);
 
         this.queryBuilder.select(this.knex.raw(`(${query}) as "${name}"`, bindings));
+        return this as any;
+    }
+
+    public coalesce() {
+        this.hasSelectClause = true;
+        const [alias, ...keys] = Array.from(arguments) as string[];
+        const columnNames = keys.map((key) => this.getColumnName(...key.split(".")));
+        const placeholders = columnNames.map(() => "??").join(", ");
+
+        // The object alias form is used on purpose: a `??` binding would split a dotted alias into separate identifiers.
+        this.queryBuilder.select({ [alias]: this.knex.raw(`coalesce(${placeholders})`, columnNames) } as any);
         return this as any;
     }
 
