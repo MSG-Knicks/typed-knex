@@ -1,0 +1,94 @@
+"use strict";
+var __decorate =
+    (this && this.__decorate) ||
+    function (decorators, target, key, desc) {
+        var c = arguments.length,
+            r = c < 3 ? target : desc === null ? (desc = Object.getOwnPropertyDescriptor(target, key)) : desc,
+            d;
+        if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+        else for (var i = decorators.length - 1; i >= 0; i--) if ((d = decorators[i])) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+        return c > 3 && r && Object.defineProperty(target, key, r), r;
+    };
+var __metadata =
+    (this && this.__metadata) ||
+    function (k, v) {
+        if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+    };
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TemporalTestClassTable = exports.correctTableName = exports.UserSetting = exports.NoLockTable = exports.User = exports.UserCategory = exports.Region = void 0;
+const temporal_polyfill_1 = require("temporal-polyfill");
+const decorators_1 = require("../src/decorators");
+const ICustomDatabaseType_1 = require("../src/ICustomDatabaseType");
+let Region = class Region {};
+__decorate([(0, decorators_1.Column)({ primary: true }), __metadata("design:type", String)], Region.prototype, "id", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", Number)], Region.prototype, "code", void 0);
+Region = __decorate([(0, decorators_1.Table)("regions")], Region);
+exports.Region = Region;
+let UserCategory = class UserCategory {};
+__decorate([(0, decorators_1.Column)({ primary: true }), __metadata("design:type", String)], UserCategory.prototype, "id", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", String)], UserCategory.prototype, "name", void 0);
+__decorate([(0, decorators_1.Column)({ name: "regionId" }), __metadata("design:type", Region)], UserCategory.prototype, "region", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", String)], UserCategory.prototype, "regionId", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", Number)], UserCategory.prototype, "year", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", String)], UserCategory.prototype, "phoneNumber", void 0);
+__decorate([(0, decorators_1.Column)({ name: "backupRegionId" }), __metadata("design:type", Region)], UserCategory.prototype, "backupRegion", void 0);
+__decorate([(0, decorators_1.Column)({ name: "INTERNAL_NAME" }), __metadata("design:type", String)], UserCategory.prototype, "specialRegionId", void 0);
+UserCategory = __decorate([(0, decorators_1.Table)("userCategories")], UserCategory);
+exports.UserCategory = UserCategory;
+class IExtraData extends ICustomDatabaseType_1.ICustomDatabaseType {}
+let User = class User {};
+__decorate([(0, decorators_1.Column)({ primary: true }), __metadata("design:type", String)], User.prototype, "id", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", String)], User.prototype, "name", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", Number)], User.prototype, "numericValue", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", String)], User.prototype, "someValue", void 0);
+__decorate([(0, decorators_1.Column)({ name: "categoryId" }), __metadata("design:type", UserCategory)], User.prototype, "category", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", String)], User.prototype, "categoryId", void 0);
+__decorate([(0, decorators_1.Column)({ name: "category2Id" }), __metadata("design:type", UserCategory)], User.prototype, "category2", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", String)], User.prototype, "nickName", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", Date)], User.prototype, "birthDate", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", Object)], User.prototype, "deathDate", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", Array)], User.prototype, "tags", void 0);
+__decorate([(0, decorators_1.Column)({ name: "weirdDatabaseName" }), __metadata("design:type", String)], User.prototype, "status", void 0);
+__decorate([(0, decorators_1.Column)({ name: "weirdDatabaseName2" }), __metadata("design:type", String)], User.prototype, "notUndefinedStatus", void 0);
+__decorate([(0, decorators_1.Column)({ name: "optionalCategoryId" }), __metadata("design:type", UserCategory)], User.prototype, "optionalCategory", void 0);
+__decorate([(0, decorators_1.Column)({ name: "nullableCategoryId" }), __metadata("design:type", Object)], User.prototype, "nullableCategory", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", String)], User.prototype, "someOptionalValue", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", Object)], User.prototype, "someNullableValue", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", IExtraData)], User.prototype, "extraData", void 0);
+User = __decorate([(0, decorators_1.Table)("users")], User);
+exports.User = User;
+let NoLockTable = class NoLockTable {};
+__decorate([(0, decorators_1.Column)({ primary: true }), __metadata("design:type", String)], NoLockTable.prototype, "id", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", String)], NoLockTable.prototype, "name", void 0);
+NoLockTable = __decorate([(0, decorators_1.Table)("nolockTable", "NOLOCK")], NoLockTable);
+exports.NoLockTable = NoLockTable;
+let UserSetting = class UserSetting {};
+__decorate([(0, decorators_1.Column)({ primary: true }), __metadata("design:type", String)], UserSetting.prototype, "id", void 0);
+__decorate([(0, decorators_1.Column)({ name: "userId" }), __metadata("design:type", User)], UserSetting.prototype, "user", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", String)], UserSetting.prototype, "userId", void 0);
+__decorate([(0, decorators_1.Column)({ name: "user2Id" }), __metadata("design:type", User)], UserSetting.prototype, "user2", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", String)], UserSetting.prototype, "user2Id", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", String)], UserSetting.prototype, "key", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", String)], UserSetting.prototype, "value", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", String)], UserSetting.prototype, "initialValue", void 0);
+__decorate([(0, decorators_1.Column)({ name: "other_value" }), __metadata("design:type", String)], UserSetting.prototype, "otherValue", void 0);
+__decorate([(0, decorators_1.Column)({ name: "no_lock" }), __metadata("design:type", NoLockTable)], UserSetting.prototype, "noLockColumn", void 0);
+UserSetting = __decorate([(0, decorators_1.Table)("userSettings")], UserSetting);
+exports.UserSetting = UserSetting;
+let correctTableName = class correctTableName {};
+__decorate([(0, decorators_1.Column)({ primary: true }), __metadata("design:type", String)], correctTableName.prototype, "id", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", Number)], correctTableName.prototype, "code", void 0);
+correctTableName = __decorate([(0, decorators_1.Table)()], correctTableName);
+exports.correctTableName = correctTableName;
+let TemporalTestClassTable = class TemporalTestClassTable {};
+__decorate([(0, decorators_1.Column)({ primary: true }), __metadata("design:type", String)], TemporalTestClassTable.prototype, "id", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", temporal_polyfill_1.Temporal.PlainDate)], TemporalTestClassTable.prototype, "temporalDateColumn", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", temporal_polyfill_1.Temporal.PlainTime)], TemporalTestClassTable.prototype, "temporalTimeColumn", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", temporal_polyfill_1.Temporal.PlainDateTime)], TemporalTestClassTable.prototype, "temporalDateTimeColumn", void 0);
+__decorate([(0, decorators_1.Column)({ type: temporal_polyfill_1.Temporal.PlainDate }), __metadata("design:type", Object)], TemporalTestClassTable.prototype, "nullableTemporalDateColumn", void 0);
+__decorate([(0, decorators_1.Column)({ type: temporal_polyfill_1.Temporal.PlainDateTime }), __metadata("design:type", Object)], TemporalTestClassTable.prototype, "nullableTemporalDateTimeColumn", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", Date)], TemporalTestClassTable.prototype, "sqlDateColumn", void 0);
+__decorate([(0, decorators_1.Column)(), __metadata("design:type", Date)], TemporalTestClassTable.prototype, "sqlDateTimeColumn", void 0);
+TemporalTestClassTable = __decorate([(0, decorators_1.Table)("temporal")], TemporalTestClassTable);
+exports.TemporalTestClassTable = TemporalTestClassTable;
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoidGVzdFRhYmxlcy5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uL3Rlc3QvdGVzdFRhYmxlcy50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7Ozs7QUFBQSx5REFBNkM7QUFDN0Msa0RBQWtEO0FBQ2xELG9FQUFpRTtBQUdqRSxJQUFhLE1BQU0sR0FBbkIsTUFBYSxNQUFNO0NBS2xCLENBQUE7QUFIRztJQURDLElBQUEsbUJBQU0sRUFBQyxFQUFFLE9BQU8sRUFBRSxJQUFJLEVBQUUsQ0FBQzs7a0NBQ1A7QUFFbkI7SUFEQyxJQUFBLG1CQUFNLEdBQUU7O29DQUNXO0FBSlgsTUFBTTtJQURsQixJQUFBLGtCQUFLLEVBQUMsU0FBUyxDQUFDO0dBQ0osTUFBTSxDQUtsQjtBQUxZLHdCQUFNO0FBUW5CLElBQWEsWUFBWSxHQUF6QixNQUFhLFlBQVk7Q0FpQnhCLENBQUE7QUFmRztJQURDLElBQUEsbUJBQU0sRUFBQyxFQUFFLE9BQU8sRUFBRSxJQUFJLEVBQUUsQ0FBQzs7d0NBQ1A7QUFFbkI7SUFEQyxJQUFBLG1CQUFNLEdBQUU7OzBDQUNZO0FBRXJCO0lBREMsSUFBQSxtQkFBTSxFQUFDLEVBQUUsSUFBSSxFQUFFLFVBQVUsRUFBRSxDQUFDOzhCQUNiLE1BQU07NENBQUM7QUFFdkI7SUFEQyxJQUFBLG1CQUFNLEdBQUU7OzhDQUNnQjtBQUV6QjtJQURDLElBQUEsbUJBQU0sR0FBRTs7MENBQ1k7QUFFckI7SUFEQyxJQUFBLG1CQUFNLEdBQUU7O2lEQUNtQjtBQUU1QjtJQURDLElBQUEsbUJBQU0sRUFBQyxFQUFFLElBQUksRUFBRSxnQkFBZ0IsRUFBRSxDQUFDOzhCQUNiLE1BQU07a0RBQUM7QUFFN0I7SUFEQyxJQUFBLG1CQUFNLEVBQUMsRUFBRSxJQUFJLEVBQUUsZUFBZSxFQUFFLENBQUM7O3FEQUNGO0FBaEJ2QixZQUFZO0lBRHhCLElBQUEsa0JBQUssRUFBQyxnQkFBZ0IsQ0FBQztHQUNYLFlBQVksQ0FpQnhCO0FBakJZLG9DQUFZO0FBbUJ6QixNQUFNLFVBQVcsU0FBUSx5Q0FBbUI7Q0FBRztBQUcvQyxJQUFhLElBQUksR0FBakIsTUFBYSxJQUFJO0NBcUNoQixDQUFBO0FBbkNHO0lBREMsSUFBQSxtQkFBTSxFQUFDLEVBQUUsT0FBTyxFQUFFLElBQUksRUFBRSxDQUFDOztnQ0FDUDtBQUVuQjtJQURDLElBQUEsbUJBQU0sR0FBRTs7a0NBQ1k7QUFFckI7SUFEQyxJQUFBLG1CQUFNLEdBQUU7OzBDQUNtQjtBQUU1QjtJQURDLElBQUEsbUJBQU0sR0FBRTs7dUNBQ2lCO0FBRTFCO0lBREMsSUFBQSxtQkFBTSxFQUFDLEVBQUUsSUFBSSxFQUFFLFlBQVksRUFBRSxDQUFDOzhCQUNiLFlBQVk7c0NBQUM7QUFFL0I7SUFEQyxJQUFBLG1CQUFNLEdBQUU7O3dDQUNrQjtBQUUzQjtJQURDLElBQUEsbUJBQU0sRUFBQyxFQUFFLElBQUksRUFBRSxhQUFhLEVBQUUsQ0FBQzs4QkFDYixZQUFZO3VDQUFDO0FBRWhDO0lBREMsSUFBQSxtQkFBTSxHQUFFOztzQ0FDZ0I7QUFFekI7SUFEQyxJQUFBLG1CQUFNLEdBQUU7OEJBQ1MsSUFBSTt1Q0FBQztBQUV2QjtJQURDLElBQUEsbUJBQU0sR0FBRTs7dUNBQ3FCO0FBRTlCO0lBREMsSUFBQSxtQkFBTSxHQUFFOztrQ0FDYztBQUV2QjtJQURDLElBQUEsbUJBQU0sRUFBQyxFQUFFLElBQUksRUFBRSxtQkFBbUIsRUFBRSxDQUFDOztvQ0FDZjtBQUV2QjtJQURDLElBQUEsbUJBQU0sRUFBQyxFQUFFLElBQUksRUFBRSxvQkFBb0IsRUFBRSxDQUFDOztnREFDTDtBQUVsQztJQURDLElBQUEsbUJBQU0sRUFBQyxFQUFFLElBQUksRUFBRSxvQkFBb0IsRUFBRSxDQUFDOzhCQUNiLFlBQVk7OENBQUM7QUFFdkM7SUFEQyxJQUFBLG1CQUFNLEVBQUMsRUFBRSxJQUFJLEVBQUUsb0JBQW9CLEVBQUUsQ0FBQzs7OENBQ007QUFFN0M7SUFEQyxJQUFBLG1CQUFNLEdBQUU7OytDQUN5QjtBQUVsQztJQURDLElBQUEsbUJBQU0sR0FBRTs7K0NBQytCO0FBRXhDO0lBREMsSUFBQSxtQkFBTSxHQUFFOzhCQUNVLFVBQVU7dUNBQUM7QUFwQ3JCLElBQUk7SUFEaEIsSUFBQSxrQkFBSyxFQUFDLE9BQU8sQ0FBQztHQUNGLElBQUksQ0FxQ2hCO0FBckNZLG9CQUFJO0FBd0NqQixJQUFhLFdBQVcsR0FBeEIsTUFBYSxXQUFXO0NBTXZCLENBQUE7QUFKRztJQURDLElBQUEsbUJBQU0sRUFBQyxFQUFFLE9BQU8sRUFBRSxJQUFJLEVBQUUsQ0FBQzs7dUNBQ1A7QUFHbkI7SUFEQyxJQUFBLG1CQUFNLEdBQUU7O3lDQUNXO0FBTFgsV0FBVztJQUR2QixJQUFBLGtCQUFLLEVBQUMsYUFBYSxFQUFFLFFBQVEsQ0FBQztHQUNsQixXQUFXLENBTXZCO0FBTlksa0NBQVc7QUFTeEIsSUFBYSxXQUFXLEdBQXhCLE1BQWEsV0FBVztDQXFCdkIsQ0FBQTtBQW5CRztJQURDLElBQUEsbUJBQU0sRUFBQyxFQUFFLE9BQU8sRUFBRSxJQUFJLEVBQUUsQ0FBQzs7dUNBQ1A7QUFFbkI7SUFEQyxJQUFBLG1CQUFNLEVBQUMsRUFBRSxJQUFJLEVBQUUsUUFBUSxFQUFFLENBQUM7OEJBQ2IsSUFBSTt5Q0FBQztBQUVuQjtJQURDLElBQUEsbUJBQU0sR0FBRTs7MkNBQ2M7QUFFdkI7SUFEQyxJQUFBLG1CQUFNLEVBQUMsRUFBRSxJQUFJLEVBQUUsU0FBUyxFQUFFLENBQUM7OEJBQ2IsSUFBSTswQ0FBQztBQUVwQjtJQURDLElBQUEsbUJBQU0sR0FBRTs7NENBQ2U7QUFFeEI7SUFEQyxJQUFBLG1CQUFNLEdBQUU7O3dDQUNXO0FBRXBCO0lBREMsSUFBQSxtQkFBTSxHQUFFOzswQ0FDYTtBQUV0QjtJQURDLElBQUEsbUJBQU0sR0FBRTs7aURBQ29CO0FBRTdCO0lBREMsSUFBQSxtQkFBTSxFQUFDLEVBQUUsSUFBSSxFQUFFLGFBQWEsRUFBRSxDQUFDOzsrQ0FDTDtBQUUzQjtJQURDLElBQUEsbUJBQU0sRUFBQyxFQUFFLElBQUksRUFBRSxTQUFTLEVBQUUsQ0FBQzs4QkFDUCxXQUFXO2lEQUFDO0FBcEJ4QixXQUFXO0lBRHZCLElBQUEsa0JBQUssRUFBQyxjQUFjLENBQUM7R0FDVCxXQUFXLENBcUJ2QjtBQXJCWSxrQ0FBVztBQXdCeEIsSUFBYSxnQkFBZ0IsR0FBN0IsTUFBYSxnQkFBZ0I7Q0FLNUIsQ0FBQTtBQUhHO0lBREMsSUFBQSxtQkFBTSxFQUFDLEVBQUUsT0FBTyxFQUFFLElBQUksRUFBRSxDQUFDOzs0Q0FDUDtBQUVuQjtJQURDLElBQUEsbUJBQU0sR0FBRTs7OENBQ1c7QUFKWCxnQkFBZ0I7SUFENUIsSUFBQSxrQkFBSyxHQUFFO0dBQ0ssZ0JBQWdCLENBSzVCO0FBTFksNENBQWdCO0FBUTdCLElBQWEsc0JBQXNCLEdBQW5DLE1BQWEsc0JBQXNCO0NBd0JsQyxDQUFBO0FBdEJHO0lBREMsSUFBQSxtQkFBTSxFQUFDLEVBQUUsT0FBTyxFQUFFLElBQUksRUFBRSxDQUFDOztrREFDUDtBQUduQjtJQURDLElBQUEsbUJBQU0sR0FBRTs4QkFDa0IsNEJBQVEsQ0FBQyxTQUFTO2tFQUFDO0FBRzlDO0lBREMsSUFBQSxtQkFBTSxHQUFFOzhCQUNrQiw0QkFBUSxDQUFDLFNBQVM7a0VBQUM7QUFHOUM7SUFEQyxJQUFBLG1CQUFNLEdBQUU7OEJBQ3NCLDRCQUFRLENBQUMsYUFBYTtzRUFBQztBQUd0RDtJQURDLElBQUEsbUJBQU0sRUFBQyxFQUFFLElBQUksRUFBRSw0QkFBUSxDQUFDLFNBQVMsRUFBRSxDQUFDOzswRUFDd0I7QUFHN0Q7SUFEQyxJQUFBLG1CQUFNLEVBQUMsRUFBRSxJQUFJLEVBQUUsNEJBQVEsQ0FBQyxhQUFhLEVBQUUsQ0FBQzs7OEVBQzRCO0FBR3JFO0lBREMsSUFBQSxtQkFBTSxHQUFFOzhCQUNhLElBQUk7NkRBQUM7QUFHM0I7SUFEQyxJQUFBLG1CQUFNLEdBQUU7OEJBQ2lCLElBQUk7aUVBQUM7QUF2QnRCLHNCQUFzQjtJQURsQyxJQUFBLGtCQUFLLEVBQUMsVUFBVSxDQUFDO0dBQ0wsc0JBQXNCLENBd0JsQztBQXhCWSx3REFBc0IiLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgeyBUZW1wb3JhbCB9IGZyb20gXCJ0ZW1wb3JhbC1wb2x5ZmlsbFwiO1xuaW1wb3J0IHsgQ29sdW1uLCBUYWJsZSB9IGZyb20gXCIuLi9zcmMvZGVjb3JhdG9yc1wiO1xuaW1wb3J0IHsgSUN1c3RvbURhdGFiYXNlVHlwZSB9IGZyb20gXCIuLi9zcmMvSUN1c3RvbURhdGFiYXNlVHlwZVwiO1xuXG5AVGFibGUoXCJyZWdpb25zXCIpXG5leHBvcnQgY2xhc3MgUmVnaW9uIHtcbiAgICBAQ29sdW1uKHsgcHJpbWFyeTogdHJ1ZSB9KVxuICAgIHB1YmxpYyBpZCE6IHN0cmluZztcbiAgICBAQ29sdW1uKClcbiAgICBwdWJsaWMgY29kZTogbnVtYmVyO1xufVxuXG5AVGFibGUoXCJ1c2VyQ2F0ZWdvcmllc1wiKVxuZXhwb3J0IGNsYXNzIFVzZXJDYXRlZ29yeSB7XG4gICAgQENvbHVtbih7IHByaW1hcnk6IHRydWUgfSlcbiAgICBwdWJsaWMgaWQhOiBzdHJpbmc7XG4gICAgQENvbHVtbigpXG4gICAgcHVibGljIG5hbWUhOiBzdHJpbmc7XG4gICAgQENvbHVtbih7IG5hbWU6IFwicmVnaW9uSWRcIiB9KVxuICAgIHB1YmxpYyByZWdpb24hOiBSZWdpb247XG4gICAgQENvbHVtbigpXG4gICAgcHVibGljIHJlZ2lvbklkITogc3RyaW5nO1xuICAgIEBDb2x1bW4oKVxuICAgIHB1YmxpYyB5ZWFyITogbnVtYmVyO1xuICAgIEBDb2x1bW4oKVxuICAgIHB1YmxpYyBwaG9uZU51bWJlcj86IHN0cmluZztcbiAgICBAQ29sdW1uKHsgbmFtZTogXCJiYWNrdXBSZWdpb25JZFwiIH0pXG4gICAgcHVibGljIGJhY2t1cFJlZ2lvbj86IFJlZ2lvbjtcbiAgICBAQ29sdW1uKHsgbmFtZTogXCJJTlRFUk5BTF9OQU1FXCIgfSlcbiAgICBwdWJsaWMgc3BlY2lhbFJlZ2lvbklkITogc3RyaW5nO1xufVxuXG5jbGFzcyBJRXh0cmFEYXRhIGV4dGVuZHMgSUN1c3RvbURhdGFiYXNlVHlwZSB7fVxuXG5AVGFibGUoXCJ1c2Vyc1wiKVxuZXhwb3J0IGNsYXNzIFVzZXIge1xuICAgIEBDb2x1bW4oeyBwcmltYXJ5OiB0cnVlIH0pXG4gICAgcHVibGljIGlkITogc3RyaW5nO1xuICAgIEBDb2x1bW4oKVxuICAgIHB1YmxpYyBuYW1lITogc3RyaW5nO1xuICAgIEBDb2x1bW4oKVxuICAgIHB1YmxpYyBudW1lcmljVmFsdWU6IG51bWJlcjtcbiAgICBAQ29sdW1uKClcbiAgICBwdWJsaWMgc29tZVZhbHVlITogc3RyaW5nO1xuICAgIEBDb2x1bW4oeyBuYW1lOiBcImNhdGVnb3J5SWRcIiB9KVxuICAgIHB1YmxpYyBjYXRlZ29yeSE6IFVzZXJDYXRlZ29yeTtcbiAgICBAQ29sdW1uKClcbiAgICBwdWJsaWMgY2F0ZWdvcnlJZCE6IHN0cmluZztcbiAgICBAQ29sdW1uKHsgbmFtZTogXCJjYXRlZ29yeTJJZFwiIH0pXG4gICAgcHVibGljIGNhdGVnb3J5MiE6IFVzZXJDYXRlZ29yeTtcbiAgICBAQ29sdW1uKClcbiAgICBwdWJsaWMgbmlja05hbWU/OiBzdHJpbmc7XG4gICAgQENvbHVtbigpXG4gICAgcHVibGljIGJpcnRoRGF0ZTogRGF0ZTtcbiAgICBAQ29sdW1uKClcbiAgICBwdWJsaWMgZGVhdGhEYXRlOiBEYXRlIHwgbnVsbDtcbiAgICBAQ29sdW1uKClcbiAgICBwdWJsaWMgdGFncz86IHN0cmluZ1tdO1xuICAgIEBDb2x1bW4oeyBuYW1lOiBcIndlaXJkRGF0YWJhc2VOYW1lXCIgfSlcbiAgICBwdWJsaWMgc3RhdHVzPzogc3RyaW5nO1xuICAgIEBDb2x1bW4oeyBuYW1lOiBcIndlaXJkRGF0YWJhc2VOYW1lMlwiIH0pXG4gICAgcHVibGljIG5vdFVuZGVmaW5lZFN0YXR1czogc3RyaW5nO1xuICAgIEBDb2x1bW4oeyBuYW1lOiBcIm9wdGlvbmFsQ2F0ZWdvcnlJZFwiIH0pXG4gICAgcHVibGljIG9wdGlvbmFsQ2F0ZWdvcnk/OiBVc2VyQ2F0ZWdvcnk7XG4gICAgQENvbHVtbih7IG5hbWU6IFwibnVsbGFibGVDYXRlZ29yeUlkXCIgfSlcbiAgICBwdWJsaWMgbnVsbGFibGVDYXRlZ29yeTogVXNlckNhdGVnb3J5IHwgbnVsbDtcbiAgICBAQ29sdW1uKClcbiAgICBwdWJsaWMgc29tZU9wdGlvbmFsVmFsdWU/OiBzdHJpbmc7XG4gICAgQENvbHVtbigpXG4gICAgcHVibGljIHNvbWVOdWxsYWJsZVZhbHVlOiBzdHJpbmcgfCBudWxsO1xuICAgIEBDb2x1bW4oKVxuICAgIHB1YmxpYyBleHRyYURhdGEhOiBJRXh0cmFEYXRhO1xufVxuXG5AVGFibGUoXCJub2xvY2tUYWJsZVwiLCBcIk5PTE9DS1wiKVxuZXhwb3J0IGNsYXNzIE5vTG9ja1RhYmxlIHtcbiAgICBAQ29sdW1uKHsgcHJpbWFyeTogdHJ1ZSB9KVxuICAgIHB1YmxpYyBpZCE6IHN0cmluZztcblxuICAgIEBDb2x1bW4oKVxuICAgIHB1YmxpYyBuYW1lOiBzdHJpbmc7XG59XG5cbkBUYWJsZShcInVzZXJTZXR0aW5nc1wiKVxuZXhwb3J0IGNsYXNzIFVzZXJTZXR0aW5nIHtcbiAgICBAQ29sdW1uKHsgcHJpbWFyeTogdHJ1ZSB9KVxuICAgIHB1YmxpYyBpZCE6IHN0cmluZztcbiAgICBAQ29sdW1uKHsgbmFtZTogXCJ1c2VySWRcIiB9KVxuICAgIHB1YmxpYyB1c2VyITogVXNlcjtcbiAgICBAQ29sdW1uKClcbiAgICBwdWJsaWMgdXNlcklkITogc3RyaW5nO1xuICAgIEBDb2x1bW4oeyBuYW1lOiBcInVzZXIySWRcIiB9KVxuICAgIHB1YmxpYyB1c2VyMiE6IFVzZXI7XG4gICAgQENvbHVtbigpXG4gICAgcHVibGljIHVzZXIySWQhOiBzdHJpbmc7XG4gICAgQENvbHVtbigpXG4gICAgcHVibGljIGtleSE6IHN0cmluZztcbiAgICBAQ29sdW1uKClcbiAgICBwdWJsaWMgdmFsdWUhOiBzdHJpbmc7XG4gICAgQENvbHVtbigpXG4gICAgcHVibGljIGluaXRpYWxWYWx1ZSE6IHN0cmluZztcbiAgICBAQ29sdW1uKHsgbmFtZTogXCJvdGhlcl92YWx1ZVwiIH0pXG4gICAgcHVibGljIG90aGVyVmFsdWUhOiBzdHJpbmc7XG4gICAgQENvbHVtbih7IG5hbWU6IFwibm9fbG9ja1wiIH0pXG4gICAgcHVibGljIG5vTG9ja0NvbHVtbjogTm9Mb2NrVGFibGU7XG59XG5cbkBUYWJsZSgpXG5leHBvcnQgY2xhc3MgY29ycmVjdFRhYmxlTmFtZSB7XG4gICAgQENvbHVtbih7IHByaW1hcnk6IHRydWUgfSlcbiAgICBwdWJsaWMgaWQhOiBzdHJpbmc7XG4gICAgQENvbHVtbigpXG4gICAgcHVibGljIGNvZGU6IG51bWJlcjtcbn1cblxuQFRhYmxlKFwidGVtcG9yYWxcIilcbmV4cG9ydCBjbGFzcyBUZW1wb3JhbFRlc3RDbGFzc1RhYmxlIHtcbiAgICBAQ29sdW1uKHsgcHJpbWFyeTogdHJ1ZSB9KVxuICAgIHB1YmxpYyBpZCE6IHN0cmluZztcblxuICAgIEBDb2x1bW4oKVxuICAgIHB1YmxpYyB0ZW1wb3JhbERhdGVDb2x1bW46IFRlbXBvcmFsLlBsYWluRGF0ZTtcblxuICAgIEBDb2x1bW4oKVxuICAgIHB1YmxpYyB0ZW1wb3JhbFRpbWVDb2x1bW46IFRlbXBvcmFsLlBsYWluVGltZTtcblxuICAgIEBDb2x1bW4oKVxuICAgIHB1YmxpYyB0ZW1wb3JhbERhdGVUaW1lQ29sdW1uOiBUZW1wb3JhbC5QbGFpbkRhdGVUaW1lO1xuXG4gICAgQENvbHVtbih7IHR5cGU6IFRlbXBvcmFsLlBsYWluRGF0ZSB9KVxuICAgIHB1YmxpYyBudWxsYWJsZVRlbXBvcmFsRGF0ZUNvbHVtbjogVGVtcG9yYWwuUGxhaW5EYXRlIHwgbnVsbDtcblxuICAgIEBDb2x1bW4oeyB0eXBlOiBUZW1wb3JhbC5QbGFpbkRhdGVUaW1lIH0pXG4gICAgcHVibGljIG51bGxhYmxlVGVtcG9yYWxEYXRlVGltZUNvbHVtbjogVGVtcG9yYWwuUGxhaW5EYXRlVGltZSB8IG51bGw7XG5cbiAgICBAQ29sdW1uKClcbiAgICBwdWJsaWMgc3FsRGF0ZUNvbHVtbjogRGF0ZTtcblxuICAgIEBDb2x1bW4oKVxuICAgIHB1YmxpYyBzcWxEYXRlVGltZUNvbHVtbjogRGF0ZTtcbn1cbiJdfQ==
